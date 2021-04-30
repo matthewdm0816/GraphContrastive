@@ -1,0 +1,5 @@
+optimizer_type: SGD
+dataset_type: Cora
+gpu_id: 0
+gpu_ids: [0, 1]
+batch_size_single: 32
