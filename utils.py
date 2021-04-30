@@ -42,12 +42,8 @@ class ObjectDict(dict):
 class YAMLParser:
     def __init__(self, filename):
         with open(filename, 'r') as f:
-            self._data = load(f, Loader=Loader)
+            self.data = load(f, Loader=Loader)
         self.data = ObjectDict(self.data)
-
-    @property
-    def data(self):
-        return self._data
 
     @contextmanager
     def fetch(self):

@@ -40,7 +40,7 @@ print(
 )
 
 config_file = "config.yml"
-config = YAMLParser('config_file').data
+config = YAMLParser(config_file).data
 
 # ================ Config Tests
 assert config.optimizer_type in ["Adam", "SGD"]
@@ -48,7 +48,7 @@ assert config.dataset_type in ["Cora", "Citeseer", "Pubmed"]
 config.ngpu = len(config.gpu_ids)
 config.parallel = config.ngpu > 1
 config.batch_size = config.batch_size_single * config.ngpu
-tabulate(config.items)
+print(tabulate(config.items()))
 
 device = torch.device("cuda:%d" % config.gpu_id if torch.cuda.is_available() else "cpu")
 
