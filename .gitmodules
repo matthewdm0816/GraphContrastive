@@ -1,0 +1,3 @@
+[submodule "GraphMethods"]
+	path = GraphMethods
+	url = git@github.com:matthewdm0816/GraphMethods.git
