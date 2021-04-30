@@ -14,7 +14,7 @@ from torch_geometric.nn import (
     GMMConv,
 )
 import torch_geometric as tg
-from torch_geometric.datasets import ModelNet
+from torch_geometric.datasets import Planetoid
 from torch_geometric.data import DataLoader, DataListLoader
 from torch_geometric.utils import degree, get_laplacian, remove_self_loops
 from torch_geometric.nn import GATConv, knn_graph
