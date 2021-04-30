@@ -12,6 +12,7 @@ from torch_geometric.nn import (
     knn_graph,
     DataParallel,
     GMMConv,
+    DynamicEdgeConv
 )
 import torch_geometric as tg
 from torch_geometric.datasets import ModelNet
@@ -23,6 +24,32 @@ from icecream import ic
 
 from utils import layers
 
+
+
+class MLP(nn.Module):
+    """
+    Plain MLP with activation
+    """
+
+    def __init__(self, fin, fout, activation=nn.ReLU, dropout=None, batchnorm=True):
+        super().__init__()
+        if dropout is not None and batchnorm:
+            assert isinstance(dropout, float)
+            self.net = nn.Sequential(
+                nn.Linear(fin, fout),
+                nn.BatchNorm1d(fout),
+                nn.Dropout(p=dropout),
+                activation(),
+            )
+        elif batchnorm:
+            self.net = nn.Sequential(
+                nn.Linear(fin, fout), nn.BatchNorm1d(fout), activation()
+            )
+        else:
+            self.net = nn.Sequential(nn.Linear(fin, fout), activation())
+
+    def forward(self, x):
+        return self.net(x)
 
 class BaseClassifier(nn.Module):
     r"""
@@ -46,7 +73,9 @@ class BaseClassifier(nn.Module):
         return NotImplementedError
 
     def get_classifier(self, i, o):
-        return NotImplementedError
+        return nn.Sequential(
+            nn.Linear(i, o),
+        )
 
     # def calc_filter(x, filter, edge_index):
     #     return filter(x, edge_index=edge_index)
@@ -62,7 +91,7 @@ class BaseClassifier(nn.Module):
         loss = self.criterion(x.log(), target)
         return loss, x
 
-class GATDenoiser(nn.Module):
+class GATClassifier(nn.Module):
     r"""
     Baseline GAT as a classifier
     examplar hidden_layers:
@@ -122,3 +151,20 @@ class GATDenoiser(nn.Module):
         x = self.cls(x)  # assume we have normalized/softmaxed prob here.
         loss = self.criterion(x.log(), target)
         return loss, x
+
+class DGCNNClassifier(BaseClassifier):
+    def __init(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def process_fin(self, fin):
+        return [fin]
+
+    def get_layer(self, i, o):
+        mlp = MLP(2 * i, o)
+        econv = nn.Sequential(
+            DynamicEdgeConv(mlp, k=32),
+            nn.PReLU(),
+            nn.BatchNorm1d(o)
+        )
+        ic(econv, i, o)
+        return econv
