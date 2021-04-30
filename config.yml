@@ -1,5 +1,15 @@
+debug: true
 optimizer_type: SGD
 dataset_type: Cora
 gpu_id: 0
 gpu_ids: [0, 1]
 batch_size_single: 32
+use_sbn: true
+model_type: DGCNN
+hidden_layers: [256, 512, 256]
+model_name: DGCNNClassifier256-512-512
+lr: 1e-4
+T_0: 200
+T_mult: 1
+beg_epochs: 0
+milestone_path: null

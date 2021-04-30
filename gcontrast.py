@@ -40,36 +40,78 @@ print(
 config_file = "config.yml"
 config = YAMLParser(config_file).data
 
-# --------------------- config tests --------------------- #
+# ------------------ configuration tests ----------------- #
 
 assert config.optimizer_type in ["Adam", "SGD"]
 assert config.dataset_type in ["Cora", "Citeseer", "Pubmed"]
-assert config.dataset_type in ["DGCNN", "GAT"]
+assert config.model_type in ["DGCNN", "GAT"]
+
+if config.debug:
+    ic(config.milestone_path)
+    print(tabulate(config.items()))
+    exit(0)
+
+# ---------------- general configurations ---------------- #
+
 config.ngpu = len(config.gpu_ids)
 config.parallel = config.ngpu > 1
 config.batch_size = config.batch_size_single * config.ngpu
-
 config.device = torch.device(
     "cuda:%d" % config.gpu_id if torch.cuda.is_available() else "cpu"
-    )
+)
+
 if config.dataset_type in ["Cora", "Citeseer", "Pubmed"]:
     config.dataset = Planetoid(
-        root='/home1/dataset/%s' % (config.dataset_type), name=config.dataset_type
+        root="/home1/dataset/%s" % (config.dataset_type), name=config.dataset_type
     )
 else:
     raise NotImplementedError("Only supports Cora/Citeseer/Pubmed dataser for now")
 
+config.timestamp = init_train(config.parallel, config.gpu_ids)
+
+# ------------------ model configurations ---------------- #
+
 config.fin = config.dataset.num_node_features
 config.n_cls = config.dataset.num_classes
-config.model = DGCNNClassifier(
-    config.fin, config.n_cls, hidden_layers=[256, 512, 256]
+if config.model_type == "DGCNN":
+    config.model = DGCNNClassifier(
+        config.fin, config.n_cls, hidden_layers=config.hidden_layers
+    )
+elif config.model_type == "GAT":
+    config.model = GATClassifier(
+        config.fin, config.n_cls, hidden_layers=config.hidden_layers
+    )
+else:
+    raise NotImplementedError
+
+
+if config.parallel and config.use_sbn:
+    config.model = parallelize_model(
+        config.model, config.device, config.gpu_ids, config.gpu_id
+    )
+else:
+    config.model = config.model.to(config.device)
+
+config.writer = SummaryWriter(comment=config.model_name)
+
+# --------------- optimizer configurations --------------- #
+
+config.optimizer, config.scheduler = get_optimizer(
+    config.model,
+    config.optimizer_type,
+    config.lr,
+    config.beg_epochs,
+    config.T_0,
+    config.T_mult,
 )
+
+# ---------------- milestone optional load --------------- #
+
 
 print(tabulate(config.items()))
 
-# -------------------------------------------------------- #
-
 # ----------------- train/eval functions ----------------- #
+
 
 def train(config):
     """
@@ -82,7 +124,9 @@ def train(config):
     current_lr = config.optimizer.param_groups[0]["lr"]
     ic(current_lr)
 
-    for i, batch in tqdm(enumerate(config.train_loader), total=config.train_loader_length):
+    for i, batch in tqdm(
+        enumerate(config.train_loader), total=config.train_loader_length
+    ):
         # torch.cuda.empty_cache()
         batch = process_batch(batch, config.parallel, config.dataset_type)
 
@@ -114,5 +158,6 @@ def train(config):
         return total_mse, total_psnr, total_orig_psnr, current_lr
     else:
         return total_mse, total_psnr, total_orig_psnr
+
 
 # -------------------------------------------------------- #

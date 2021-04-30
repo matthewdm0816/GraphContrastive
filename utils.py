@@ -1,21 +1,29 @@
 r"""
 General Helpers/Utilities
 """
-from yaml import load, dump
 from icecream import ic
-from tqdm import tqdm, trange 
+from tqdm import tqdm, trange
 import pretty_errors
 from contextlib import contextmanager
+import colorama
+import torch
+
+colorama.init(autoreset=True)
+
+from yaml import load, dump, safe_load
+
 try:
     from yaml import CLoader as Loader, CDumper as Dumper
 except ImportError:
     ic()
     from yaml import Loader, Dumper
 
+
 class layers:
     r"""
     Enumerate layer sizes
     """
+
     def __init__(self, ns):
         self.ns = ns
         self.iter1 = iter(ns)
@@ -30,6 +38,10 @@ class layers:
 
 
 class ObjectDict(dict):
+    r"""
+    Wrap the dict in an object-like way
+    """
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -39,12 +51,98 @@ class ObjectDict(dict):
     def __setattr__(self, key, value):
         self[key] = value
 
+
 class YAMLParser:
+    r"""
+    Simply parses YAML file and return an object-like dictionary
+    """
+
     def __init__(self, filename):
-        with open(filename, 'r') as f:
-            self.data = load(f, Loader=Loader)
+        with open(filename, "r") as f:
+            self.data = safe_load(f)
         self.data = ObjectDict(self.data)
 
     @contextmanager
     def fetch(self):
         yield self.data
+
+
+def parallelize_model(model, device, gpu_ids, gpu_id):
+    from torch_geometric.nn import DataParallel
+
+    try:
+        # fix sync-batchnorm
+        from sync_batchnorm import convert_model
+
+        model = convert_model(model)
+    except ModuleNotFoundError:
+        raise ModuleNotFoundError("Sync-BN plugin not found")
+    # NOTE: DataParallel call MUST after model definition completes
+    model = DataParallel(model, device_ids=gpu_ids, output_device=gpu_id).to(device)
+    ic("Parallelized model")
+    return model
+
+
+def init_train(parallel, gpu_ids):
+    torch.backends.cudnn.benchmark = True
+    print(
+        colorama.Fore.MAGENTA
+        + (
+            "Running in Single-GPU mode"
+            if not parallel
+            else "Running in Multiple-GPU mode with GPU {}".format(gpu_ids)
+        )
+    )
+
+    # load timestamp
+    try:
+        with open("timestamp.yml", "r") as f:
+            timestamp = safe_load(f)["timestamp"] + 1
+    except FileNotFoundError:
+        # init timestamp
+        timestamp = 1
+    finally:
+        # save timestamp
+        with open("timestamp.json", "w") as f:
+            dump({"timestamp": timestamp}, f)
+    return timestamp
+
+def get_optimizer(model, optimizer_type, lr, beg_epochs, T_0=200, T_mult=1):
+    from torch import optim
+    import re
+
+    print(colorama.Fore.RED + "Using optimizer type %s" % optimizer_type)
+    if optimizer_type == "Adam":
+        optimizer = optim.Adam(
+            [
+                {"params": model.parameters(), "initial_lr": lr},
+                # {"params": model.parameters(), "initial_lr": 0.002}
+            ],
+            lr=lr,
+            weight_decay=5e-4,
+            betas=(0.9, 0.999),
+        )
+    elif optimizer_type == "SGD":
+        # Using SGD Nesterov-accelerated with Momentum
+        optimizer = optim.SGD(
+            [
+                {
+                    "params": model.parameters(),
+                    "initial_lr": alt_lr,
+                },
+            ],
+            lr=0.002,
+            weight_decay=5e-4,
+            momentum=0.9,
+            nesterov=True,
+        )
+
+    # scheduler = optim.lr_scheduler.CosineAnnealingLR(
+    #     optimizer, T_max=100, last_epoch=beg_epochs
+    # )
+    # Cosine annealing with restarts
+    # etc.
+    scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(
+        optimizer, T_0=T_0, T_mult=T_mult, last_epoch=beg_epochs, eta_min=1e-6
+    )
+    return optimizer, scheduler
