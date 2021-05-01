@@ -173,3 +173,29 @@ def process_transductive_data(data, mask):
     # data.edge_index = data.edge_index[mask]
     data.x = data.x[mask]
     data.y = data.y[mask]
+
+def check_dir(path, color=None):    
+    """
+    check directory if avaliable
+    """
+    import os, colorama
+
+    if not os.path.exists(path):
+        print("" if color is None else color + "Creating path %s" % path)
+        os.makedirs(path, exist_ok=True)
+
+def process_batch(batch, parallel: bool, dataset_type):
+    raise NotImplementedError
+
+class Counter:
+    def __init__(self, init = 0):
+        self.sum = init
+        self.count = 0
+
+    def add(self, value):
+        self.count += 1
+        self.sum += value
+
+    @property
+    def mean(self):
+        return self.sum / self.count

@@ -9,6 +9,8 @@
 	],
 	"settings": {
 		"cSpell.words": [
+			"cuda",
+			"tqdm",
 			"transductive"
 		]
 	}

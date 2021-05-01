@@ -1,4 +1,6 @@
+# debug config
 debug: true
+# training config
 optimizer_type: SGD
 dataset_type: Cora
 gpu_id: 0
@@ -12,4 +14,10 @@ lr: 1e-4
 T_0: 200
 T_mult: 1
 beg_epochs: 0
+total_epochs: 500
+# label noise config
+label_noise: 0.4
+# misc config
 milestone_path: null
+milestone_save_epochs: 10
+report_iterations: 10

@@ -91,11 +91,6 @@ if config.dataset_type in ["Cora", "Citeseer", "Pubmed"]:
 else:
     raise NotImplementedError("Only supports Cora/Citeseer/Pubmed dataser for now")
 
-if config.debug:
-    print(tabulate(config.items()))
-    exit(0)
-# todo: dataloaders
-
 
 config.batch_cnt = len(config.train_loader)
 
@@ -137,6 +132,13 @@ config.optimizer, config.scheduler = get_optimizer(
 
 # ---------------- milestone optional load --------------- #
 
+config.model_path = os.path.join("model", "%s-%s-%s" % (
+    config.model_name, 
+    str(config.timestamp),
+    "clean" if config.label_noise == 0 else "ln%f" % config.label_noise
+))
+check_dir(config.model_path)
+
 if config.milestone_path is not None:
     load_model(config.model, config.optimizer, config.milestone_path, config.beg_epochs)
 else:
@@ -145,55 +147,130 @@ else:
 # --------------------- print configs -------------------- #
 
 print(tabulate(config.items()))
+if config.debug:
+    exit(0)
 
 # ----------------- train/eval functions ----------------- #
 
 
-def train(config):
+def train(config, train: bool = True):
+    r"""
+    Train 1 epoch
     """
-    NOTE: Need DROP_LAST=TRUE, in case batch length is not uniform
-    """
-    # global dataset_type
-    config.model.train()
+    if train:
+        config.model.train()
+    else:
+        config.model.eval()
 
     # show current lr
-    current_lr = config.optimizer.param_groups[0]["lr"]
-    ic(current_lr)
+    if train:
+        current_lr = config.optimizer.param_groups[0]["lr"]
+        ic(current_lr)
+    total_loss, total_acc, total_confidence, total_entropy = (
+        Counter(),
+        Counter(),
+        Counter(),
+        Counter(),
+    )
+    with torch.set_grad_enabled(train):
+        for i, batch in tqdm(
+            enumerate(config.train_loader), total=config.train_loader_length
+        ):
+            # torch.cuda.empty_cache()
+            batch = process_batch(batch, config.parallel, config.dataset_type)
 
-    for i, batch in tqdm(
-        enumerate(config.train_loader), total=config.train_loader_length
-    ):
-        # torch.cuda.empty_cache()
-        batch = process_batch(batch, config.parallel, config.dataset_type)
+            config.model.zero_grad()
+            loss, x, conf, correct, ent = config.model(batch)
+            loss = loss.mean()
+            acc = correct.sum() / x.shape[0]
 
-        config.model.zero_grad()
-        loss, x = model(batch)
-        loss = loss.mean()
+            loss.backward()
+            config.optimizer.step()
 
-        loss.backward()
-        config.optimizer.step()
-        if i % 10 == 0:
-            print(
-                colorama.Fore.MAGENTA
-                + "[%d/%d]MSE: %.3f, LOSS: %.3f, MSE-ORIG: %.3f, PSNR: %.3f, PSNR-ORIG: %.3f"
-                % (
-                    epoch,
-                    i,
-                    mse_loss.detach().item(),
-                    loss.detach().item(),
-                    orig_mse.detach().item(),
-                    psnr_loss.detach().item(),
-                    orig_psnr.detach().item(),
+            if i % config.report_iterations == 0:
+                print(
+                    colorama.Fore.MAGENTA
+                    + "[%d/%d]LOSS: %.2e, ACC: %.2f, CONF: %.2f, ENT: %.2f"
+                    % (
+                        epoch,
+                        i,
+                        loss.detach().item(),
+                        acc.detach().item(),
+                        conf.detach().item(),
+                        ent.detach().item(),
+                    )
                 )
-            )
-    scheduler.step()
-    total_mse /= len(loader)
-    total_psnr /= len(loader)
-    total_orig_psnr /= len(loader)
-    if return_lr:
-        return total_mse, total_psnr, total_orig_psnr, current_lr
+            with torch.no_grad():
+                total_loss.add(loss)
+                total_acc.add(loss)
+                total_confidence.add(loss)
+                total_entropy.add(loss)
+
+    config.scheduler.step()
+    if train:
+        return (
+            total_loss.mean(),
+            total_acc.mean(),
+            total_confidence.mean(),
+            total_entropy.mean(),
+            current_lr,
+        )
     else:
-        return total_mse, total_psnr, total_orig_psnr
+        return (
+            total_loss.mean(),
+            total_acc.mean(),
+            total_confidence.mean(),
+            total_entropy.mean(),
+        )
 
+# ------------------------- main ------------------------- #
 
-# -------------------------------------------------------- #
+if __name__ == "__main__":
+    for epoch in trange(config.beg_epochs, config.total_epochs + 1):
+        train_loss, train_acc, train_confidence, train_entropy, train_lr = train(
+            config, train=True
+        )
+        test_loss, test_acc, test_confidence, test_entropy = train(
+            config, train=False
+        )
+        # ---------------------- save model ---------------------- #
+        if epoch % config.milestone_save_epochs == 0 and epoch != 0:
+            if config.parallel:
+                model_to_save = config.model.module
+            else:
+                model_to_save = config.model
+            torch.save(
+                model_to_save.state_dict(),
+                os.path.join(model_path, "model-%d.save" % (epoch)),
+            )
+            torch.save(
+                config.optimizer.state_dict(),
+                os.path.join(model_path, "opt-%d.save" % (epoch)),
+            )
+            torch.save(
+                model_to_save.state_dict(),
+                os.path.join(model_path, "model-latest.save"),
+            )
+            torch.save(
+                config.optimizer.state_dict(), os.path.join(model_path, "opt-latest.save")
+            )
+
+        # ------------------ log to tensorboard ------------------ #
+        record_dict = {
+            "train_loss": train_loss,
+            "train_acc": train_acc,
+            "train_confidence": train_confidence,
+            "train_entropy": train_entropy,
+            "test_loss": test_loss,
+            "test_acc": test_acc,
+            "test_confidence": test_confidence,
+            "test_entropy": test_entropy,
+            "current_lr": current_lr,
+        }
+
+        for key in record_dict:
+            if not isinstance(record_dict[key], dict):
+                config.writer.add_scalar(key, record_dict[key], epoch)
+            else:
+                config.writer.add_scalars(key, record_dict[key], epoch)
+                # add multiple records

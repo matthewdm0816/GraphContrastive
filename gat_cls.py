@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+from torch.distributions.categorical import Categorical
 
 from torchsummary import summary
 import torch_geometric.nn as tgnn
@@ -87,9 +88,13 @@ class BaseClassifier(nn.Module):
             edge_index = knn_graph(x, k=32, batch=batch, loop=False)
             x = filter(x, edge_index=edge_index)
 
-        x = self.cls(x)  # assume we have normalized/softmaxed prob here.
+        # assume we have normalized/softmaxed prob here.
+        x = self.cls(x)  # [N, C]
         loss = self.criterion(x.log(), target)
-        return loss, x
+        confidence, sel = x.max(dim=-1) # [N, ]
+        correct = (sel == target).sum().float()  # [1, ]
+        ent = Categorical(probs=x).entropy()
+        return loss, x, confidence, correct, ent
 
 class GATClassifier(nn.Module):
     r"""
