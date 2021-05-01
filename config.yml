@@ -1,8 +1,10 @@
 # debug config
 debug: true
+# dataset config
+dataset_type: Cora
+dataset_path: /home1/wtmo/dataset/
 # training config
 optimizer_type: SGD
-dataset_type: Cora
 gpu_id: 0
 gpu_ids: [0, 1]
 batch_size_single: 32
@@ -16,7 +18,7 @@ T_mult: 1
 beg_epochs: 0
 total_epochs: 500
 # label noise config
-label_noise: 0.4
+noise_rate: 0.4
 # misc config
 milestone_path: null
 milestone_save_epochs: 10

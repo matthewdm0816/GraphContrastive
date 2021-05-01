@@ -7,7 +7,8 @@ from contextlib import contextmanager
 import colorama, os, pretty_errors
 import torch
 import torch.nn as nn
-import torch.utils.init as init
+import torch.nn.init as init
+from torch.distributions.bernoulli import Bernoulli
 
 colorama.init(autoreset=True)
 
@@ -144,9 +145,12 @@ def get_optimizer(model, optimizer_type, lr, beg_epochs, T_0=200, T_mult=1):
     )
     return optimizer, scheduler
 
-def load_model(model, optimizer, path: str, e: int, evaluate=None, postfix: str='latest'):
-    model_path = os.path.join(path, 'model-%s.save' % postfix)
-    optimizer_path = os.path.join(path, 'opt-%s.save' % postfix)
+
+def load_model(
+    model, optimizer, path: str, e: int, evaluate=None, postfix: str = "latest"
+):
+    model_path = os.path.join(path, "model-%s.save" % postfix)
+    optimizer_path = os.path.join(path, "opt-%s.save" % postfix)
     loaded = torch.load(model_path)
     try:
         loaded = loaded.module
@@ -161,6 +165,7 @@ def load_model(model, optimizer, path: str, e: int, evaluate=None, postfix: str=
     # if evaluate is not None:
     #     evaluate(model)
 
+
 def init_weights(model):
     for m in model.modules():
         if isinstance(m, nn.Conv1d) or isinstance(m, nn.Linear):
@@ -169,12 +174,14 @@ def init_weights(model):
             m.weight.data.fill_(1)
             m.bias.data.zero_()
 
+
 def process_transductive_data(data, mask):
     # data.edge_index = data.edge_index[mask]
     data.x = data.x[mask]
     data.y = data.y[mask]
 
-def check_dir(path, color=None):    
+
+def check_dir(path, color=None):
     """
     check directory if avaliable
     """
@@ -184,11 +191,13 @@ def check_dir(path, color=None):
         print("" if color is None else color + "Creating path %s" % path)
         os.makedirs(path, exist_ok=True)
 
+
 def process_batch(batch, parallel: bool, dataset_type):
     raise NotImplementedError
 
+
 class Counter:
-    def __init__(self, init = 0):
+    def __init__(self, init=0):
         self.sum = init
         self.count = 0
 
@@ -199,3 +208,16 @@ class Counter:
     @property
     def mean(self):
         return self.sum / self.count
+
+
+def uniform_noise(data, noise_rate: float = 0.4):
+    r"""
+    for each class label y, add uniform noise
+    """
+    data.y0 = data.y.copy() # save original labels
+    n_cls = data.y.max() + 1
+    # noise_rate to be 1, else 0.
+    dist = Bernoulli(torch.tensor([noise_rate]))
+    perm_mask = dist.sample(sample_shape=data.y.shape)
+    perm = torch.randint(0, n_cls, size=data.y.shape)
+    data.y = data.y * (1 - perm_mask) + perm * perm_mask

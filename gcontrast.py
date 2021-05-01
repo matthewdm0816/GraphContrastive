@@ -23,7 +23,7 @@ from icecream import ic
 from pprint import pprint
 
 from tensorboardX import SummaryWriter
-import time, random, os, sys, gc, copy, colorama, json, re
+import time, random, os, sys, gc, copy, colorama, json, re, pretty_errors
 from tabulate import tabulate
 from gat_cls import DGCNNClassifier, GATClassifier
 from utils import *
@@ -61,8 +61,13 @@ config.timestamp = init_train(config.parallel, config.gpu_ids)
 
 if config.dataset_type in ["Cora", "Citeseer", "Pubmed"]:
     config.dataset = Planetoid(
-        root="/home1/dataset/%s" % (config.dataset_type), name=config.dataset_type
+        root=os.path.join(config.dataset_path, config.dataset_type),
+        name=config.dataset_type,
     )
+    # add label noise
+    # config.original_dataset = config.dataset
+    if config.noise_rate > 1e-6:
+        uniform_noise(config.dataset, config.noise_rate)
     config.train_dataset = config.dataset.data
     process_transductive_data(config.train_dataset, config.dataset.train_mask)
     config.val_dataset = config.dataset.data
@@ -90,7 +95,6 @@ if config.dataset_type in ["Cora", "Citeseer", "Pubmed"]:
 
 else:
     raise NotImplementedError("Only supports Cora/Citeseer/Pubmed dataser for now")
-
 
 config.batch_cnt = len(config.train_loader)
 
@@ -132,11 +136,15 @@ config.optimizer, config.scheduler = get_optimizer(
 
 # ---------------- milestone optional load --------------- #
 
-config.model_path = os.path.join("model", "%s-%s-%s" % (
-    config.model_name, 
-    str(config.timestamp),
-    "clean" if config.label_noise == 0 else "ln%f" % config.label_noise
-))
+config.model_path = os.path.join(
+    "model",
+    "%s-%s-%s"
+    % (
+        config.model_name,
+        str(config.timestamp),
+        "clean" if config.noise_rate < 1e-6 else "ln%.1f" % config.noise_rate,
+    ),
+)
 check_dir(config.model_path)
 
 if config.milestone_path is not None:
@@ -166,7 +174,8 @@ def train(config, train: bool = True):
     if train:
         current_lr = config.optimizer.param_groups[0]["lr"]
         ic(current_lr)
-    total_loss, total_acc, total_confidence, total_entropy = (
+    total_loss, total_acc, total_oacc, total_confidence, total_entropy = (
+        Counter(),
         Counter(),
         Counter(),
         Counter(),
@@ -180,9 +189,10 @@ def train(config, train: bool = True):
             batch = process_batch(batch, config.parallel, config.dataset_type)
 
             config.model.zero_grad()
-            loss, x, conf, correct, ent = config.model(batch)
+            loss, x, conf, correct, original_correct, ent = config.model(batch)
             loss = loss.mean()
             acc = correct.sum() / x.shape[0]
+            oacc = original_correct.sum() / x.shape[0]
 
             loss.backward()
             config.optimizer.step()
@@ -190,27 +200,30 @@ def train(config, train: bool = True):
             if i % config.report_iterations == 0:
                 print(
                     colorama.Fore.MAGENTA
-                    + "[%d/%d]LOSS: %.2e, ACC: %.2f, CONF: %.2f, ENT: %.2f"
+                    + "[%d/%d]LOSS: %.2e, NACC: %.2f, CACC: %.2f, CONF: %.2f, ENT: %.2f"
                     % (
                         epoch,
                         i,
                         loss.detach().item(),
                         acc.detach().item(),
+                        oacc.detach().item(),
                         conf.detach().item(),
                         ent.detach().item(),
                     )
                 )
             with torch.no_grad():
                 total_loss.add(loss)
-                total_acc.add(loss)
-                total_confidence.add(loss)
-                total_entropy.add(loss)
+                total_acc.add(acc)
+                total_oacc.add(oacc)
+                total_confidence.add(conf)
+                total_entropy.add(ent)
 
     config.scheduler.step()
     if train:
         return (
             total_loss.mean(),
             total_acc.mean(),
+            total_oacc.mean(),
             total_confidence.mean(),
             total_entropy.mean(),
             current_lr,
@@ -219,18 +232,25 @@ def train(config, train: bool = True):
         return (
             total_loss.mean(),
             total_acc.mean(),
+            total_oacc.mean(),
             total_confidence.mean(),
             total_entropy.mean(),
         )
+
 
 # ------------------------- main ------------------------- #
 
 if __name__ == "__main__":
     for epoch in trange(config.beg_epochs, config.total_epochs + 1):
-        train_loss, train_acc, train_confidence, train_entropy, train_lr = train(
-            config, train=True
-        )
-        test_loss, test_acc, test_confidence, test_entropy = train(
+        (
+            train_loss,
+            train_acc,
+            train_oacc,
+            train_confidence,
+            train_entropy,
+            train_lr,
+        ) = train(config, train=True)
+        test_loss, test_acc, test_oacc, test_confidence, test_entropy = train(
             config, train=False
         )
         # ---------------------- save model ---------------------- #
@@ -252,17 +272,20 @@ if __name__ == "__main__":
                 os.path.join(model_path, "model-latest.save"),
             )
             torch.save(
-                config.optimizer.state_dict(), os.path.join(model_path, "opt-latest.save")
+                config.optimizer.state_dict(),
+                os.path.join(model_path, "opt-latest.save"),
             )
 
         # ------------------ log to tensorboard ------------------ #
         record_dict = {
             "train_loss": train_loss,
             "train_acc": train_acc,
+            "train_oacc": train_oacc,
             "train_confidence": train_confidence,
             "train_entropy": train_entropy,
             "test_loss": test_loss,
             "test_acc": test_acc,
+            "test_oacc": test_oacc,
             "test_confidence": test_confidence,
             "test_entropy": test_entropy,
             "current_lr": current_lr,

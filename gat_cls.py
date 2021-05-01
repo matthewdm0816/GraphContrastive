@@ -83,7 +83,7 @@ class BaseClassifier(nn.Module):
 
     def forward(self, data):
         # print(data)
-        target, batch, x = data.target, data.batch, data.x
+        target, clean_target, batch, x = data.y, data.y0, data.batch, data.x
         for i, filter in enumerate(self.filters):
             edge_index = knn_graph(x, k=32, batch=batch, loop=False)
             x = filter(x, edge_index=edge_index)
@@ -93,8 +93,9 @@ class BaseClassifier(nn.Module):
         loss = self.criterion(x.log(), target)
         confidence, sel = x.max(dim=-1) # [N, ]
         correct = (sel == target).sum().float()  # [1, ]
+        original_correct = (sel == clean_target).sum().float()
         ent = Categorical(probs=x).entropy()
-        return loss, x, confidence, correct, ent
+        return loss, x, confidence, correct, original_correct, ent
 
 class GATClassifier(nn.Module):
     r"""
@@ -146,7 +147,7 @@ class GATClassifier(nn.Module):
 
     def forward(self, data):
         # print(data)
-        target, batch, x = data.target, data.batch, data.x
+        target, batch, x = data.y, data.batch, data.x
         for i, (layer, activation) in enumerate(zip(self.gats, self.activation)):
             # use dynamic graph
             edge_index = knn_graph(x, k=32, batch=batch, loop=False)
