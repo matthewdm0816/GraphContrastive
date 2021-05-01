@@ -60,6 +60,10 @@ config.device = torch.device(
     "cuda:%d" % config.gpu_id if torch.cuda.is_available() else "cpu"
 )
 
+config.timestamp = init_train(config.parallel, config.gpu_ids)
+
+# ---------------- dataset and dataloaders --------------- #
+
 if config.dataset_type in ["Cora", "Citeseer", "Pubmed"]:
     config.dataset = Planetoid(
         root="/home1/dataset/%s" % (config.dataset_type), name=config.dataset_type
@@ -67,7 +71,10 @@ if config.dataset_type in ["Cora", "Citeseer", "Pubmed"]:
 else:
     raise NotImplementedError("Only supports Cora/Citeseer/Pubmed dataser for now")
 
-config.timestamp = init_train(config.parallel, config.gpu_ids)
+# todo: dataloaders
+train_dataset = 
+
+config.batch_cnt = len(config.train_loader)
 
 # ------------------ model configurations ---------------- #
 
@@ -107,6 +114,12 @@ config.optimizer, config.scheduler = get_optimizer(
 
 # ---------------- milestone optional load --------------- #
 
+if config.milestone_path is not None:
+    load_model(config.model, config.optimizer, config.milestone_path, config.beg_epochs)
+else:
+    init_weights(config.model)
+
+# --------------------- print configs -------------------- #
 
 print(tabulate(config.items()))
 

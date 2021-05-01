@@ -3,10 +3,10 @@ General Helpers/Utilities
 """
 from icecream import ic
 from tqdm import tqdm, trange
-import pretty_errors
 from contextlib import contextmanager
-import colorama
+import colorama, os, pretty_errors
 import torch
+import torch.nn as nn
 
 colorama.init(autoreset=True)
 
@@ -107,6 +107,7 @@ def init_train(parallel, gpu_ids):
             dump({"timestamp": timestamp}, f)
     return timestamp
 
+
 def get_optimizer(model, optimizer_type, lr, beg_epochs, T_0=200, T_mult=1):
     from torch import optim
     import re
@@ -125,13 +126,8 @@ def get_optimizer(model, optimizer_type, lr, beg_epochs, T_0=200, T_mult=1):
     elif optimizer_type == "SGD":
         # Using SGD Nesterov-accelerated with Momentum
         optimizer = optim.SGD(
-            [
-                {
-                    "params": model.parameters(),
-                    "initial_lr": alt_lr,
-                },
-            ],
-            lr=0.002,
+            [{"params": model.parameters(), "initial_lr": lr,},],
+            lr=lr,
             weight_decay=5e-4,
             momentum=0.9,
             nesterov=True,
@@ -146,3 +142,28 @@ def get_optimizer(model, optimizer_type, lr, beg_epochs, T_0=200, T_mult=1):
         optimizer, T_0=T_0, T_mult=T_mult, last_epoch=beg_epochs, eta_min=1e-6
     )
     return optimizer, scheduler
+
+def load_model(model, optimizer, path: str, e: int, evaluate=None, postfix: str='latest'):
+    model_path = os.path.join(path, 'model-%s.save' % postfix)
+    optimizer_path = os.path.join(path, 'opt-%s.save' % postfix)
+    loaded = torch.load(model_path)
+    try:
+        loaded = loaded.module
+        ic(loaded)
+    except:
+        ic()
+        pass
+    model.load_state_dict(loaded)
+    print("Loaded milestone with epoch %d at %s" % (e, model_path))
+    optimizer.load_state_dict(torch.load(optimizer_path))
+    print("Loaded milestone optimizer with epoch %d at %s" % (e, optimizer_path))
+    # if evaluate is not None:
+    #     evaluate(model)
+
+def init_weights(model):
+    for m in model.modules():
+        if isinstance(m, nn.Conv1d) or isinstance(m, nn.Linear):
+            init.xavier_uniform_(m.weight.data, gain=nn.init.calculate_gain("relu"))
+        elif isinstance(m, nn.BatchNorm1d):
+            m.weight.data.fill_(1)
+            m.bias.data.zero_()
