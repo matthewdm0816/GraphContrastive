@@ -1,24 +1,24 @@
 # debug config
-debug: true
+debug: false
 # dataset config
 dataset_type: Cora
 dataset_path: /home1/wtmo/dataset/
 # training config
-optimizer_type: SGD
+optimizer_type: Adam
 gpu_id: 0
-gpu_ids: [0, 1]
+gpu_ids: [0]
 batch_size_single: 32
 use_sbn: true
 model_type: DGCNN
 hidden_layers: [256, 512, 256]
-model_name: DGCNNClassifier256-512-512
+model_name: DGCNNClassifier256-512-256
 lr: 0.001
-T_0: 200
+T_0: 100
 T_mult: 1
 beg_epochs: 0
-total_epochs: 500
+total_epochs: 200
 # label noise config
-noise_rate: 0.4
+noise_rate: 0.0
 # milestone config
 milestone_path: null
 milestone_save_epochs: 10

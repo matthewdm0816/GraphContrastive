@@ -105,7 +105,7 @@ def init_train(parallel, gpu_ids):
         timestamp = 1
     finally:
         # save timestamp
-        with open("timestamp.json", "w") as f:
+        with open("timestamp.yml", "w") as f:
             dump({"timestamp": timestamp}, f)
     return timestamp
 
@@ -176,9 +176,11 @@ def init_weights(model):
 
 def process_transductive_data(data, mask):
     # data.edge_index = data.edge_index[mask]
-    for key in data:
-        if key in ['x', 'y', 'y0']:
-            data[key] = data[key][mask]
+    # ic(data)
+    # for key in data.keys:
+    #     if key in ['x', 'y', 'y0']:
+    #         data[key] = data[key][mask]
+    data.mask = mask
 
 
 def check_dir(path, color=None):
@@ -190,10 +192,6 @@ def check_dir(path, color=None):
     if not os.path.exists(path):
         print("" if color is None else color + "Creating path %s" % path)
         os.makedirs(path, exist_ok=True)
-
-
-def process_batch(batch, parallel: bool, dataset_type):
-    raise NotImplementedError
 
 
 class Counter:
@@ -214,10 +212,58 @@ def uniform_noise(data, noise_rate: float = 0.4):
     r"""
     for each class label y, add uniform noise
     """
-    data.y0 = data.y.clone() # save original labels
+    data.y0 = data.y.clone()  # save original labels
     n_cls = data.y.max() + 1
     # noise_rate to be 1, else 0.
     dist = Bernoulli(torch.tensor([noise_rate]))
-    perm_mask = dist.sample(sample_shape=data.y.shape)
+    perm_mask = dist.sample(sample_shape=data.y.shape).view(-1)
     perm = torch.randint(0, n_cls, size=data.y.shape)
+    # ic(perm_mask.shape, perm.shape)
     data.y = data.y * (1 - perm_mask) + perm * perm_mask
+
+
+def parallel_cuda(batch, device):
+    for i, data in enumerate(batch):
+        for key in data.keys:
+            if torch.is_tensor(data[key]):
+                data[key].to(device)
+        batch[i] = data
+    return batch
+
+
+def copy_batch(batch):
+    if isinstance(batch, list):
+        return [data.clone().to(data.x) for data in batch]
+    else:
+        return batch.clone().to(batch.x)
+
+
+def process_batch(batch, target_device, parallel, dataset_type):
+    result_batch = copy_batch(batch)
+
+    if parallel:  # only paraller loader impl.ed
+        result_batch = parallel_cuda(batch, target_device)
+    else:
+        result_batch = batch.to(target_device)
+    return result_batch
+
+
+class MultiSequential(nn.Sequential):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def forward(self, input):
+        for module in self._modules.values():
+            input = (module(*input),)
+        return input[0]
+
+
+def entropy(x, dim:int = -1):
+    r""" x ~ [N, C]
+    Calculate Entropy
+    """
+    total = x.sum(dim=dim, keepdim=True)
+    probs = x / total
+    res = -x * x.log()
+    return x.sum(dim=dim)
+

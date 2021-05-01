@@ -27,6 +27,7 @@ import time, random, os, sys, gc, copy, colorama, json, re, pretty_errors
 from tabulate import tabulate
 from gat_cls import DGCNNClassifier, GATClassifier
 from utils import *
+from copy import copy
 
 # limit CPU usage
 torch.set_num_threads(16)
@@ -67,32 +68,40 @@ if config.dataset_type in ["Cora", "Citeseer", "Pubmed"]:
     config.fin = config.dataset.num_node_features
     config.n_cls = config.dataset.num_classes
     ic(config.dataset.data, config.fin, config.n_cls)
+    ic(config.dataset.data.train_mask.sum().item())
+    ic(config.dataset.data.val_mask.sum().item())
+    ic(config.dataset.data.test_mask.sum().item())
     # add label noise
-    if config.noise_rate > 1e-6:
-        uniform_noise(config.dataset.data, config.noise_rate)
-    config.train_dataset = config.dataset.data
+    # if config.noise_rate > 1e-6:
+    uniform_noise(config.dataset.data, config.noise_rate)
+    config.train_dataset = config.dataset.data.clone()
     process_transductive_data(config.train_dataset, config.dataset.data.train_mask)
-    config.val_dataset = config.dataset.data
+    config.val_dataset = config.dataset.data.clone()
     process_transductive_data(config.val_dataset, config.dataset.data.val_mask)
-    config.test_dataset = config.dataset.data
+    config.test_dataset = config.dataset.data.clone()
     process_transductive_data(config.test_dataset, config.dataset.data.test_mask)
+    ic(config.train_dataset)
+    # FIXME: single data dataset for now
     if not config.parallel:
         config.train_loader = DataLoader(
-            config.train_dataset, batch_size=config.batch_size
+            [config.train_dataset], batch_size=config.batch_size
         )
-        config.val_loader = DataLoader(config.val_dataset, batch_size=config.batch_size)
+        config.val_loader = DataLoader(
+            [config.val_dataset], batch_size=config.batch_size
+        )
         config.test_loader = DataLoader(
-            config.test_dataset, batch_size=config.batch_size
+            [config.test_dataset], batch_size=config.batch_size
         )
     else:
+        # todo
         config.train_loader = DataListLoader(
-            config.train_dataset, batch_size=config.batch_size
+            [config.train_dataset], batch_size=config.batch_size
         )
         config.val_loader = DataListLoader(
-            config.val_dataset, batch_size=config.batch_size
+            [config.val_dataset], batch_size=config.batch_size
         )
         config.test_loader = DataListLoader(
-            config.test_dataset, batch_size=config.batch_size
+            [config.test_dataset], batch_size=config.batch_size
         )
 
 else:
@@ -142,8 +151,8 @@ config.model_path = os.path.join(
     "%s-%s-%s"
     % (
         config.model_name,
-        str(config.timestamp),
         "clean" if config.noise_rate < 1e-6 else "ln%.1f" % config.noise_rate,
+        str(config.timestamp),
     ),
 )
 check_dir(config.model_path)
@@ -157,7 +166,7 @@ else:
 
 config_str = tabulate(config.items())
 print(config_str)
-with open(config.tabulate_path, 'w') as f:
+with open(config.tabulate_path, "w") as f:
     f.write(config_str)
 if config.debug:
     exit(0)
@@ -165,7 +174,7 @@ if config.debug:
 # ----------------- train/eval functions ----------------- #
 
 
-def train(config, train: bool = True):
+def train(config, loader, train: bool = True):
     r"""
     Train 1 epoch
     """
@@ -186,31 +195,37 @@ def train(config, train: bool = True):
         Counter(),
     )
     with torch.set_grad_enabled(train):
-        for i, batch in tqdm(
-            enumerate(config.train_loader), total=config.train_loader_length
-        ):
+        # for i, batch in tqdm(enumerate(loader), total=len(loader)):
+        for i, batch in enumerate(loader):
             # torch.cuda.empty_cache()
-            batch = process_batch(batch, config.parallel, config.dataset_type)
+            batch = process_batch(
+                batch, config.device, config.parallel, config.dataset_type
+            )
 
             config.model.zero_grad()
+            data_size = batch.x[batch.mask].shape[0]
             loss, x, conf, correct, original_correct, ent = config.model(batch)
             loss = loss.mean()
-            acc = correct.sum() / x.shape[0]
-            oacc = original_correct.sum() / x.shape[0]
+            conf = conf.mean()
+            ent = ent.mean()
+            acc = correct.sum() / data_size
+            oacc = original_correct.sum() / data_size
+            if train:
+                loss.backward()
+                config.optimizer.step()
+                config.scheduler.step()
 
-            loss.backward()
-            config.optimizer.step()
-
-            if i % config.report_iterations == 0:
+            if True or i % config.report_iterations == 0:
                 print(
                     colorama.Fore.MAGENTA
-                    + "[%d/%d]LOSS: %.2e, NACC: %.2f, CACC: %.2f, CONF: %.2f, ENT: %.2f"
+                    + "[%d%s/%d]LOSS: %.2e, NACC: %.2f\%, CACC: %.2f\%, CONF: %.2f, ENT: %.2f"
                     % (
                         epoch,
+                        "t" if train else "e",
                         i,
                         loss.detach().item(),
-                        acc.detach().item(),
-                        oacc.detach().item(),
+                        100. * acc.detach().item(),
+                        100. * oacc.detach().item(),
                         conf.detach().item(),
                         ent.detach().item(),
                     )
@@ -221,41 +236,39 @@ def train(config, train: bool = True):
                 total_oacc.add(oacc)
                 total_confidence.add(conf)
                 total_entropy.add(ent)
-
-    config.scheduler.step()
     if train:
         return (
-            total_loss.mean(),
-            total_acc.mean(),
-            total_oacc.mean(),
-            total_confidence.mean(),
-            total_entropy.mean(),
+            total_loss.mean,
+            total_acc.mean,
+            total_oacc.mean,
+            total_confidence.mean,
+            total_entropy.mean,
             current_lr,
         )
     else:
         return (
-            total_loss.mean(),
-            total_acc.mean(),
-            total_oacc.mean(),
-            total_confidence.mean(),
-            total_entropy.mean(),
+            total_loss.mean,
+            total_acc.mean,
+            total_oacc.mean,
+            total_confidence.mean,
+            total_entropy.mean,
         )
 
 
 # ------------------------- main ------------------------- #
 
 if __name__ == "__main__":
-    for epoch in trange(config.beg_epochs, config.total_epochs + 1):
+    for epoch in range(config.beg_epochs, config.total_epochs + 1):
         (
             train_loss,
             train_acc,
             train_oacc,
             train_confidence,
             train_entropy,
-            train_lr,
-        ) = train(config, train=True)
-        test_loss, test_acc, test_oacc, test_confidence, test_entropy = train(
-            config, train=False
+            current_lr,
+        ) = train(config, loader=config.train_loader, train=True)
+        (test_loss, test_acc, test_oacc, test_confidence, test_entropy) = train(
+            config, loader=config.test_loader, train=False
         )
         # ---------------------- save model ---------------------- #
         if epoch % config.milestone_save_epochs == 0 and epoch != 0:
@@ -265,19 +278,19 @@ if __name__ == "__main__":
                 model_to_save = config.model
             torch.save(
                 model_to_save.state_dict(),
-                os.path.join(model_path, "model-%d.save" % (epoch)),
+                os.path.join(config.model_path, "model-%d.save" % (epoch)),
             )
             torch.save(
                 config.optimizer.state_dict(),
-                os.path.join(model_path, "opt-%d.save" % (epoch)),
+                os.path.join(config.model_path, "opt-%d.save" % (epoch)),
             )
             torch.save(
                 model_to_save.state_dict(),
-                os.path.join(model_path, "model-latest.save"),
+                os.path.join(config.model_path, "model-latest.save"),
             )
             torch.save(
                 config.optimizer.state_dict(),
-                os.path.join(model_path, "opt-latest.save"),
+                os.path.join(config.model_path, "opt-latest.save"),
             )
 
         # ------------------ log to tensorboard ------------------ #
