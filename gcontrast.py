@@ -46,11 +46,6 @@ assert config.optimizer_type in ["Adam", "SGD"]
 assert config.dataset_type in ["Cora", "Citeseer", "Pubmed"]
 assert config.model_type in ["DGCNN", "GAT"]
 
-if config.debug:
-    ic(config.milestone_path)
-    print(tabulate(config.items()))
-    exit(0)
-
 # ---------------- general configurations ---------------- #
 
 config.ngpu = len(config.gpu_ids)
@@ -68,11 +63,39 @@ if config.dataset_type in ["Cora", "Citeseer", "Pubmed"]:
     config.dataset = Planetoid(
         root="/home1/dataset/%s" % (config.dataset_type), name=config.dataset_type
     )
+    config.train_dataset = config.dataset.data
+    process_transductive_data(config.train_dataset, config.dataset.train_mask)
+    config.val_dataset = config.dataset.data
+    process_transductive_data(config.val_dataset, config.dataset.val_mask)
+    config.test_dataset = config.dataset.data
+    process_transductive_data(config.test_dataset, config.dataset.test_mask)
+    if not config.parallel:
+        config.train_loader = DataLoader(
+            config.train_dataset, batch_size=config.batch_size
+        )
+        config.val_loader = DataLoader(config.val_dataset, batch_size=config.batch_size)
+        config.test_loader = DataLoader(
+            config.test_dataset, batch_size=config.batch_size
+        )
+    else:
+        config.train_loader = DataListLoader(
+            config.train_dataset, batch_size=config.batch_size
+        )
+        config.val_loader = DataListLoader(
+            config.val_dataset, batch_size=config.batch_size
+        )
+        config.test_loader = DataListLoader(
+            config.test_dataset, batch_size=config.batch_size
+        )
+
 else:
     raise NotImplementedError("Only supports Cora/Citeseer/Pubmed dataser for now")
 
+if config.debug:
+    print(tabulate(config.items()))
+    exit(0)
 # todo: dataloaders
-train_dataset = 
+
 
 config.batch_cnt = len(config.train_loader)
 

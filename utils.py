@@ -7,6 +7,7 @@ from contextlib import contextmanager
 import colorama, os, pretty_errors
 import torch
 import torch.nn as nn
+import torch.utils.init as init
 
 colorama.init(autoreset=True)
 
@@ -167,3 +168,8 @@ def init_weights(model):
         elif isinstance(m, nn.BatchNorm1d):
             m.weight.data.fill_(1)
             m.bias.data.zero_()
+
+def process_transductive_data(data, mask):
+    # data.edge_index = data.edge_index[mask]
+    data.x = data.x[mask]
+    data.y = data.y[mask]
