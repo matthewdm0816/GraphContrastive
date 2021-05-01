@@ -12,14 +12,16 @@ use_sbn: true
 model_type: DGCNN
 hidden_layers: [256, 512, 256]
 model_name: DGCNNClassifier256-512-512
-lr: 1e-4
+lr: 0.001
 T_0: 200
 T_mult: 1
 beg_epochs: 0
 total_epochs: 500
 # label noise config
 noise_rate: 0.4
-# misc config
+# milestone config
 milestone_path: null
 milestone_save_epochs: 10
+# misc config
 report_iterations: 10
+tabulate_path: last_run.log

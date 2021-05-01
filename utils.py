@@ -139,7 +139,6 @@ def get_optimizer(model, optimizer_type, lr, beg_epochs, T_0=200, T_mult=1):
     #     optimizer, T_max=100, last_epoch=beg_epochs
     # )
     # Cosine annealing with restarts
-    # etc.
     scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(
         optimizer, T_0=T_0, T_mult=T_mult, last_epoch=beg_epochs, eta_min=1e-6
     )
@@ -177,8 +176,9 @@ def init_weights(model):
 
 def process_transductive_data(data, mask):
     # data.edge_index = data.edge_index[mask]
-    data.x = data.x[mask]
-    data.y = data.y[mask]
+    for key in data:
+        if key in ['x', 'y', 'y0']:
+            data[key] = data[key][mask]
 
 
 def check_dir(path, color=None):
@@ -214,7 +214,7 @@ def uniform_noise(data, noise_rate: float = 0.4):
     r"""
     for each class label y, add uniform noise
     """
-    data.y0 = data.y.copy() # save original labels
+    data.y0 = data.y.clone() # save original labels
     n_cls = data.y.max() + 1
     # noise_rate to be 1, else 0.
     dist = Bernoulli(torch.tensor([noise_rate]))

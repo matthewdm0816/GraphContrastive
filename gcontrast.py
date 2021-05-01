@@ -64,16 +64,18 @@ if config.dataset_type in ["Cora", "Citeseer", "Pubmed"]:
         root=os.path.join(config.dataset_path, config.dataset_type),
         name=config.dataset_type,
     )
+    config.fin = config.dataset.num_node_features
+    config.n_cls = config.dataset.num_classes
+    ic(config.dataset.data, config.fin, config.n_cls)
     # add label noise
-    # config.original_dataset = config.dataset
     if config.noise_rate > 1e-6:
-        uniform_noise(config.dataset, config.noise_rate)
+        uniform_noise(config.dataset.data, config.noise_rate)
     config.train_dataset = config.dataset.data
-    process_transductive_data(config.train_dataset, config.dataset.train_mask)
+    process_transductive_data(config.train_dataset, config.dataset.data.train_mask)
     config.val_dataset = config.dataset.data
-    process_transductive_data(config.val_dataset, config.dataset.val_mask)
+    process_transductive_data(config.val_dataset, config.dataset.data.val_mask)
     config.test_dataset = config.dataset.data
-    process_transductive_data(config.test_dataset, config.dataset.test_mask)
+    process_transductive_data(config.test_dataset, config.dataset.data.test_mask)
     if not config.parallel:
         config.train_loader = DataLoader(
             config.train_dataset, batch_size=config.batch_size
@@ -100,8 +102,7 @@ config.batch_cnt = len(config.train_loader)
 
 # ------------------ model configurations ---------------- #
 
-config.fin = config.dataset.num_node_features
-config.n_cls = config.dataset.num_classes
+
 if config.model_type == "DGCNN":
     config.model = DGCNNClassifier(
         config.fin, config.n_cls, hidden_layers=config.hidden_layers
@@ -154,7 +155,10 @@ else:
 
 # --------------------- print configs -------------------- #
 
-print(tabulate(config.items()))
+config_str = tabulate(config.items())
+print(config_str)
+with open(config.tabulate_path, 'w') as f:
+    f.write(config_str)
 if config.debug:
     exit(0)
 
