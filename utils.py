@@ -217,13 +217,13 @@ def uniform_noise(data, noise_rate: float = 0.4):
     only on train data!
     """
     data.y0 = data.y.clone()  # save original labels
-    if noise_rate < 1e-5:
-        return
+    # if noise_rate < 1e-5:
+    #     return 
     n_cls = data.y.max() + 1
     n_sample = data.y[data.train_mask].shape[0]
     ic(round(noise_rate * n_sample))
     perm_pos = np.random.choice(range(0, n_sample), size=round(noise_rate * n_sample), replace=False)
-    perm_mask = np.zeros_like(data.y[data.train_mask])
+    perm_mask = torch.from_numpy(np.zeros_like(data.y[data.train_mask]))
     perm_mask[perm_pos] = 1.
 
     perm = torch.tensor(
@@ -245,8 +245,8 @@ def gaussian_feature_noise(data, noise_rate: float = 0.3):
     only on train data!
     """
     data.x0 = data.x.clone()  # save original labels
-    if noise_rate < 1e-5:
-        return
+    # if noise_rate < 1e-5:
+    #     return
     norm = data.x[data.train_mask].norm(dim=-1).mean()
     # ic(norm)
     noise = torch.randn_like(data.x[data.train_mask]).clamp(-3, 3) * norm * noise_rate
@@ -297,3 +297,4 @@ def entropy(x, dim: int = -1):
     probs = x / total + 1e-8
     res = -probs * probs.log()
     return res.sum(dim=dim)
+

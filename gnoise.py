@@ -73,15 +73,24 @@ if config.dataset_type in ["Cora", "Citeseer", "Pubmed"]:
     ic(config.dataset.data.test_mask.sum().item())
 
     # ---------------- add label/feature noise --------------- #
-    config.ln_mask = uniform_noise(config.dataset.data, config.noise_rate) # NOTE: 1 if is noisy
+    config.ln_mask = uniform_noise(
+        config.dataset.data, config.noise_rate
+    )  # NOTE: 1 if is noisy
+    ic(config.ln_mask)
     gaussian_feature_noise(config.dataset.data, config.gaussian_noise_rate)
 
     config.train_dataset = config.dataset.data.clone()
-    process_transductive_data(config.train_dataset, config.dataset.data.train_mask, config.ln_mask)
+    process_transductive_data(
+        config.train_dataset, config.dataset.data.train_mask, config.ln_mask
+    )
     config.val_dataset = config.dataset.data.clone()
-    process_transductive_data(config.val_dataset, config.dataset.data.val_mask, config.ln_mask)
+    process_transductive_data(
+        config.val_dataset, config.dataset.data.val_mask, config.ln_mask
+    )
     config.test_dataset = config.dataset.data.clone()
-    process_transductive_data(config.test_dataset, config.dataset.data.test_mask, config.ln_mask)
+    process_transductive_data(
+        config.test_dataset, config.dataset.data.test_mask, config.ln_mask
+    )
     ic(config.train_dataset)
     # FIXME: single data dataset for now
     if not config.parallel:
@@ -212,27 +221,25 @@ def train(config, current_epoch: int, loader, train: bool = True):
     config.optimizer.zero_grad()
 
     # forward pass metrics
-    total_loss, total_acc, total_oacc, total_confidence, total_entropy = (
-        Counter(),
-        Counter(),
-        Counter(),
-        Counter(),
-        Counter(),
-    )
+    (
+        total_loss,
+        total_acc,
+        total_oacc,
+        total_real_confidence,
+        total_noise_confidence,
+        total_real_entropy,
+        total_noise_entropy,
+    ) = [Counter() for _ in range(7)]
     # adversarial pass metrics
     (
         adv_total_loss,
         adv_total_acc,
         adv_total_oacc,
-        adv_total_confidence,
-        adv_total_entropy,
-    ) = (
-        Counter(),
-        Counter(),
-        Counter(),
-        Counter(),
-        Counter(),
-    )
+        adv_total_real_confidence,
+        adv_total_noise_confidence,
+        adv_total_real_entropy,
+        adv_total_noise_entropy,
+    ) = [Counter() for _ in range(7)]
     with torch.set_grad_enabled(train):
         # for i, batch in tqdm(enumerate(loader), total=len(loader)):
         for i, batch in enumerate(loader):
@@ -243,17 +250,28 @@ def train(config, current_epoch: int, loader, train: bool = True):
             config.optimizer.zero_grad()
             data_size = batch.x[batch.mask].shape[0]
             # forward pass
-            loss, x, conf, correct, original_correct, ent = config.model(batch)
+            # with torch.autograd.set_detect_anomaly(True):
+            (
+                loss,
+                x,
+                real_conf,
+                noise_conf,
+                correct,
+                original_correct,
+                real_ent,
+                noise_ent,
+            ) = config.model(batch)
             loss = loss.mean()
-            conf = conf.mean()
-            ent = ent.mean()
+            real_conf = real_conf.mean()
+            noise_conf = noise_conf.mean()
+            real_ent = real_ent.mean()
+            noise_ent = noise_ent.mean()
             acc = correct.sum() / data_size
             oacc = original_correct.sum() / data_size
-            # ic(data_size, correct.sum(), original_correct.sum())
             if train:
                 # backward pass
                 loss.backward()
-                nn.utils.clip_grad_value_(config.model.parameters(), 100.0)
+                nn.utils.clip_grad_value_(config.model.parameters(), 1e2)
                 # for param in config.model.parameters():
                 #     if torch.any(torch.isnan(param.grad)):
                 #         ic(loss)
@@ -268,7 +286,7 @@ def train(config, current_epoch: int, loader, train: bool = True):
                     ic(current_lr)
                 print(
                     colorama.Fore.MAGENTA
-                    + "[%d%s/%d]LOSS: %.2e, NACC: %.2f%%, CACC: %.2f%%, CONF: %.2f, ENT: %.2f"
+                    + "[%d%s/%d]LOSS: %.2e, NoisyACC: %.2f%%, CleanACC: %.2f%%, NoisyCONF: %.2f, CleanCONF: %.2f, NoisyENT: %.2f, CleanENT:%.2f"
                     % (
                         epoch,
                         "t" if train else "e",
@@ -276,8 +294,10 @@ def train(config, current_epoch: int, loader, train: bool = True):
                         loss.detach().item(),
                         100.0 * acc.detach().item(),
                         100.0 * oacc.detach().item(),
-                        conf.detach().item(),
-                        ent.detach().item(),
+                        noise_conf.detach().item(),
+                        real_conf.detach().item(),
+                        noise_ent.detach().item(),
+                        real_ent.detach().item(),
                     )
                 )
 
@@ -287,7 +307,7 @@ def train(config, current_epoch: int, loader, train: bool = True):
                     if config.adversarial_method == "FGSM":
                         adv_batch = copy_batch(batch)
                         adv_batch.x.requires_grad = True
-                        loss, _, _, _, _, _ = config.model(adv_batch)
+                        loss, *_ = config.model(adv_batch)
                         loss = loss.mean()
                         loss.backward()
                         adv = adv_batch.x
@@ -303,63 +323,85 @@ def train(config, current_epoch: int, loader, train: bool = True):
                             (
                                 adv_loss,
                                 _,
-                                adv_conf,
+                                adv_real_conf,
+                                adv_noise_conf,
                                 adv_correct,
                                 adv_original_correct,
-                                adv_ent,
+                                adv_real_ent,
+                                adv_noise_ent,
                             ) = config.model(adv_batch)
                         adv_loss = adv_loss.mean()
-                        adv_conf = adv_conf.mean()
-                        adv_ent = adv_ent.mean()
+                        adv_real_conf = adv_real_conf.mean()
+                        adv_noise_conf = adv_noise_conf.mean()
+                        adv_real_ent = adv_real_ent.mean()
+                        adv_noise_ent = adv_noise_ent.mean()
                         adv_acc = adv_correct.sum() / data_size
                         adv_oacc = adv_original_correct.sum() / data_size
                     else:
                         raise NotImplementedError
-                    config.optimizer.zero_grad() # clean grads after adversarial pass
+                    config.optimizer.zero_grad()  # clean grads after adversarial pass
                     if current_epoch % config.report_iterations == 0:
                         print(
                             colorama.Fore.MAGENTA
-                            + "[%d%s/%d]AdvLOSS: %.2e, AdvNACC: %.2f%%, AdvCACC: %.2f%%, AdvCONF: %.2f, AdvENT: %.2f"
+                            + "[%d%s/%d]LOSS: %.2e, NoisyACC: %.2f%%, CleanACC: %.2f%%, NoisyCONF: %.2f, CleanCONF: %.2f, NoisyENT: %.2f, CleanENT:%.2f"
                             % (
                                 epoch,
-                                "t" if train else "e",
+                                "t-adv" if train else "e-adv",
                                 i,
                                 adv_loss.detach().item(),
                                 100.0 * adv_acc.detach().item(),
                                 100.0 * adv_oacc.detach().item(),
-                                adv_conf.detach().item(),
-                                adv_ent.detach().item(),
+                                adv_noise_conf.detach().item(),
+                                adv_real_conf.detach().item(),
+                                adv_noise_ent.detach().item(),
+                                adv_real_ent.detach().item(),
                             )
                         )
                 else:
                     # fill stats with 0.
-                    adv_loss, adv_conf, adv_acc, adv_oacc, adv_ent = torch.zeros([5])
+                    (
+                        adv_loss,
+                        adv_real_conf,
+                        adv_noise_conf,
+                        adv_acc,
+                        adv_oacc,
+                        adv_real_ent,
+                        adv_noise_ent,
+                    ) = torch.zeros([7])
 
                 # record these adversarial metrics
                 with torch.no_grad():
                     adv_total_loss.add(adv_loss)
                     adv_total_acc.add(adv_acc)
                     adv_total_oacc.add(adv_oacc)
-                    adv_total_confidence.add(adv_conf)
-                    adv_total_entropy.add(adv_ent)
+                    adv_total_real_confidence.add(adv_real_conf)
+                    adv_total_noise_confidence.add(adv_noise_conf)
+                    adv_total_real_entropy.add(adv_real_ent)
+                    adv_total_noise_entropy.add(adv_noise_ent)
 
             with torch.no_grad():
                 total_loss.add(loss)
                 total_acc.add(acc)
                 total_oacc.add(oacc)
-                total_confidence.add(conf)
-                total_entropy.add(ent)
+                total_real_confidence.add(real_conf)
+                total_noise_confidence.add(noise_conf)
+                total_real_entropy.add(real_ent)
+                total_noise_entropy.add(noise_ent)
     return (
         total_loss.mean,
         total_acc.mean,
         total_oacc.mean,
-        total_confidence.mean,
-        total_entropy.mean,
+        total_real_confidence.mean,
+        total_noise_confidence.mean,
+        total_real_entropy.mean,
+        total_noise_entropy.mean,
         adv_total_loss.mean,
         adv_total_acc.mean,
         adv_total_oacc.mean,
-        adv_total_confidence.mean,
-        adv_total_entropy.mean,
+        adv_total_real_confidence.mean,
+        adv_total_noise_confidence.mean,
+        adv_total_real_entropy.mean,
+        adv_total_noise_entropy.mean,
         None if not train else current_lr,
     )
 
@@ -372,26 +414,34 @@ if __name__ == "__main__":
             train_loss,
             train_acc,
             train_oacc,
-            train_confidence,
-            train_entropy,
+            train_real_confidence,
+            train_noise_confidence,
+            train_real_entropy,
+            train_noise_entropy,
             adv_train_loss,
             adv_train_acc,
             adv_train_oacc,
-            adv_train_confidence,
-            adv_train_entropy,
+            adv_train_real_confidence,
+            adv_train_noise_confidence,
+            adv_train_real_entropy,
+            adv_train_noise_entropy,
             current_lr,
         ) = train(config, epoch, loader=config.train_loader, train=True)
         (
-            test_loss,
             test_acc,
+            test_loss,
             test_oacc,
-            test_confidence,
-            test_entropy,
+            test_real_confidence,
+            test_noise_confidence,
+            test_real_entropy,
+            test_noise_entropy,
             adv_test_loss,
             adv_test_acc,
             adv_test_oacc,
-            adv_test_confidence,
-            adv_test_entropy,
+            adv_test_real_confidence,
+            adv_test_noise_confidence,
+            adv_test_real_entropy,
+            adv_test_noise_entropy,
             _,
         ) = train(config, epoch, loader=config.test_loader, train=False)
         # ---------------------- save model ---------------------- #
@@ -422,23 +472,31 @@ if __name__ == "__main__":
             "train_loss": train_loss,
             "train_acc": train_acc,
             "train_oacc": train_oacc,
-            "train_confidence": train_confidence,
-            "train_entropy": train_entropy,
+            "train_real_confidence": train_real_confidence,
+            "train_noise_confidence": train_noise_confidence,
+            "train_real_entropy": train_real_entropy,
+            "train_noise_entropy": train_noise_entropy,
             "adv_train_loss": adv_train_loss,
             "adv_train_acc": adv_train_acc,
             "adv_train_oacc": adv_train_oacc,
-            "adv_train_confidence": adv_train_confidence,
-            "adv_train_entropy": adv_train_entropy,
+            "adv_train_real_confidence": adv_train_real_confidence,
+            "adv_train_noise_confidence": adv_train_noise_confidence,
+            "adv_train_real_entropy": adv_train_real_entropy,
+            "adv_train_noise_entropy": adv_train_noise_entropy,
             "test_loss": test_loss,
             "test_acc": test_acc,
             "test_oacc": test_oacc,
-            "test_confidence": test_confidence,
-            "test_entropy": test_entropy,
+            "test_real_confidence": test_real_confidence,
+            "test_noise_confidence": test_noise_confidence,
+            "test_real_entropy": test_real_entropy,
+            "test_noise_entropy": test_noise_entropy,
             "adv_test_loss": adv_test_loss,
             "adv_test_acc": adv_test_acc,
             "adv_test_oacc": adv_test_oacc,
-            "adv_test_confidence": adv_test_confidence,
-            "adv_test_entropy": adv_test_entropy,
+            "adv_test_real_confidence": adv_test_real_confidence,
+            "adv_test_noise_confidence": adv_test_noise_confidence,
+            "adv_test_real_entropy": adv_test_real_entropy,
+            "adv_test_noise_entropy": adv_test_noise_entropy,
             "current_lr": current_lr,
         }
 

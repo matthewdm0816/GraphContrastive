@@ -15,7 +15,7 @@ from torch_geometric.nn import (
     GMMConv,
     DynamicEdgeConv,
     EdgeConv,
-    SGConv
+    SGConv,
 )
 import torch_geometric as tg
 from torch_geometric.datasets import ModelNet
@@ -67,7 +67,7 @@ class BaseClassifier(nn.Module):
         hidden_layers: list,
         dropout: float = 0.3,
         criterion=nn.NLLLoss(),
-        make_cls: bool=True
+        make_cls: bool = True,
     ):
         super().__init__()
         self.fin, self.hidden_layers = fin, self.process_fin(fin) + hidden_layers
@@ -97,8 +97,7 @@ class BaseClassifier(nn.Module):
 
     def get_classifier(self, i, o):
         return nn.Sequential(
-            MLP(i, o, batchnorm=False, activation=nn.Identity), 
-            nn.Softmax(dim=-1)
+            MLP(i, o, batchnorm=False, activation=nn.Identity), nn.Softmax(dim=-1)
         )
 
     # def calc_filter(x, filter, edge_index):
@@ -106,16 +105,18 @@ class BaseClassifier(nn.Module):
 
     def forward(self, data):
         # print(data)
-        target, edge_index, clean_target, batch, x, mask, ln_mask = (
+        target, edge_index, clean_target, batch, x, mask, ln_mask, train_mask = (
             data.y.long(),
             data.edge_index.long(),
             data.y0.long(),
             data.batch,
             data.x,
             data.mask.bool(),
-            data.ln_mask.bool()
+            data.ln_mask.bool(),
+            data.train_mask.bool(),
         )
-        # with torch.autograd.detect_anomaly():
+        is_noisy: bool = (ln_mask.sum().item() > 0)
+        # with torch.autograd.detect_anomaly(True):
         for i, (layer, activation) in enumerate(zip(self.filters, self.activations)):
             # use static edges
             # edge_index = knn_graph(x, k=32, batch=batch, loop=False)
@@ -128,15 +129,40 @@ class BaseClassifier(nn.Module):
         if self.make_cls:
             # assume we have normalized/softmaxed prob here.
             x = self.cls(x)  # [N, C]
-            # ic(target)
-            loss = self.criterion((x + 1e-8).log()[mask], target[mask])
+            x = x + 1e-10  # in case log0 => nan/inf
+            loss = self.criterion(x.log()[mask], target[mask])
             confidence, sel = x.max(dim=-1)  # [N, ]
-            confidence = confidence
-            # ic(sel[mask], target[mask])
+            # record correct cls
             correct = sel[mask].eq(target[mask]).float().sum()  # [1, ]
             original_correct = sel[mask].eq(clean_target[mask]).float().sum()
-            ent = entropy(x, dim=-1)
-            return loss, x, confidence, correct, original_correct, ent
+
+            # record confidence/entropy
+            if torch.all(mask.eq(train_mask)):
+                # on train set, use clean samples
+                real_confidence = confidence[train_mask][~ln_mask]
+                real_ent = entropy(x[train_mask][~ln_mask], dim=-1)
+            else:
+                # on test/val set, use all samples
+                real_confidence = confidence[mask]
+                real_ent = entropy(x[mask], dim=-1)
+            # selects noisy metrics
+            if is_noisy:
+                noise_confidence = confidence[train_mask][ln_mask]
+                noise_ent = entropy(x[train_mask][ln_mask], dim=-1)
+            else:
+                noise_confidence = real_confidence
+                noise_ent = real_ent
+
+            return (
+                loss,
+                x,
+                real_confidence,
+                noise_confidence,
+                correct,
+                original_correct,
+                real_ent,
+                noise_ent,
+            )
         else:
             return x
 
@@ -232,12 +258,16 @@ class GCNClassifier(BaseClassifier):
     def get_layer(self, i, o):
         return GCNConv(i, o)
 
+
 class SGCClassifier(BaseClassifier):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
     def process_fin(self, fin):
         return [fin]
-    
+
+    def get_activation(self, o):
+        return nn.Identity()
+
     def get_layer(self, i, o):
         return SGConv(i, o, K=3)
