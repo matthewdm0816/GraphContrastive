@@ -1,9 +1,14 @@
-# debug config
+# --------------------- debug config --------------------- #
+
 debug: false
-# dataset config
+
+# -------------------- dataset config -------------------- #
+
 dataset_type: Pubmed
 dataset_path: /home1/wtmo/dataset/
-# training config
+
+# -------------------- training config ------------------- #
+
 optimizer_type: Adam
 gpu_id: 1
 gpu_ids: [1]
@@ -12,23 +17,32 @@ use_sbn: true
 model_type: GCN
 hidden_layers: [512, 1024, 512]
 model_name: GCNClassifier512-1024-512
-lr: 0.0003
-T_0: 150
+# model_type: SGC
+# hidden_layers: [1024] # single layer, K=3 by default
+# model_name: SGCClassifier1024*3
+lr: 0.0001
+T_0: 200
 weight_decay: 0.0005
 dropout: 0.5
 T_mult: 1
 beg_epochs: 0
 total_epochs: 1000
-# label noise config
-noise_rate: 0.0
-# gaussian_noise_rate: 0
-gaussian_noise_rate: 0.3
+
+# ------------------ label noise config ------------------ #
+
+noise_rate: 0.4
+gaussian_noise_rate: 0
+# gaussian_noise_rate: 0.3
 # adversarial_noise_rate: 0.03137 # 8/255
 adversarial_noise_rate: 0
 adversarial_method: FGSM
-# milestone config
+
+# ------------------- milestone config ------------------- #
+
 milestone_path: null
 milestone_save_epochs: 10
-# misc config
+
+# ---------------------- misc config --------------------- #
+
 report_iterations: 10
 tabulate_path: last_run.log

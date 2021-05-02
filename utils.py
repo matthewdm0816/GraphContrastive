@@ -2,6 +2,7 @@ r"""
 General Helpers/Utilities
 """
 from icecream import ic
+import numpy as np
 from tqdm import tqdm, trange
 from contextlib import contextmanager
 import colorama, os, pretty_errors
@@ -116,7 +117,7 @@ def get_optimizer(model, optimizer_type, lr, beg_epochs, T_0=200, T_mult=1):
 
     print(colorama.Fore.RED + "Using optimizer type %s" % optimizer_type)
     if optimizer_type == "Adam":
-        optimizer = optim.Adam(
+        optimizer = optim.AdamW(
             [
                 {"params": model.parameters(), "initial_lr": lr},
                 # {"params": model.parameters(), "initial_lr": 0.002}
@@ -124,6 +125,7 @@ def get_optimizer(model, optimizer_type, lr, beg_epochs, T_0=200, T_mult=1):
             lr=lr,
             weight_decay=5e-4,
             betas=(0.9, 0.999),
+            # amsgrad=True
         )
     elif optimizer_type == "SGD":
         # Using SGD Nesterov-accelerated with Momentum
@@ -140,7 +142,7 @@ def get_optimizer(model, optimizer_type, lr, beg_epochs, T_0=200, T_mult=1):
     # )
     # Cosine annealing with restarts
     scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(
-        optimizer, T_0=T_0, T_mult=T_mult, last_epoch=beg_epochs, eta_min=1e-6
+        optimizer, T_0=T_0, T_mult=T_mult, last_epoch=beg_epochs
     )
     return optimizer, scheduler
 
@@ -214,14 +216,27 @@ def uniform_noise(data, noise_rate: float = 0.4):
     only on train data!
     """
     data.y0 = data.y.clone()  # save original labels
-    if noise_rate < 1e-5: return
+    if noise_rate < 1e-5:
+        return
     n_cls = data.y.max() + 1
-    # noise_rate to be 1, else 0.
-    dist = Bernoulli(torch.tensor([noise_rate]))
-    perm_mask = dist.sample(sample_shape=data.y[data.train_mask].shape).view(-1)
-    perm = torch.randint(0, n_cls, size=data.y[data.train_mask].shape)
-    # ic(perm_mask.shape, perm.shape)
-    data.y[data.train_mask] = (data.y[data.train_mask] * (1 - perm_mask) + perm * perm_mask).long()
+    n_sample = data.y[data.train_mask].shape[0]
+    ic(round(noise_rate * n_sample))
+    perm_pos = np.random.choice(range(0, n_sample), size=round(noise_rate * n_sample), replace=False)
+    perm_mask = np.zeros_like(data.y[data.train_mask])
+    perm_mask[perm_pos] = 1.
+
+    perm = torch.tensor(
+        [
+            np.random.choice(np.setdiff1d(range(0, n_cls), label))
+            for label in data.y[data.train_mask].numpy()
+        ]
+    ).long()
+    ic(perm_mask.shape, perm.shape)
+    data.y[data.train_mask] = (
+        data.y[data.train_mask] * (1 - perm_mask) + perm * perm_mask
+    ).long()
+    return perm_mask
+
 
 def gaussian_feature_noise(data, noise_rate: float = 0.3):
     r"""
@@ -229,7 +244,8 @@ def gaussian_feature_noise(data, noise_rate: float = 0.3):
     only on train data!
     """
     data.x0 = data.x.clone()  # save original labels
-    if noise_rate < 1e-5: return
+    if noise_rate < 1e-5:
+        return
     norm = data.x[data.train_mask].norm(dim=-1).mean()
     # ic(norm)
     noise = torch.randn_like(data.x[data.train_mask]).clamp(-3, 3) * norm * noise_rate
@@ -272,11 +288,11 @@ class MultiSequential(nn.Sequential):
         return input[0]
 
 
-def entropy(x, dim:int = -1):
+def entropy(x, dim: int = -1):
     r""" x ~ [N, C]
     Calculate Entropy
     """
     total = x.sum(dim=dim, keepdim=True)
-    probs = x / total
+    probs = x / total + 1e-8
     res = -probs * probs.log()
     return res.sum(dim=dim)

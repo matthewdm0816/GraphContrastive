@@ -15,6 +15,7 @@ from torch_geometric.nn import (
     GMMConv,
     DynamicEdgeConv,
     EdgeConv,
+    SGConv
 )
 import torch_geometric as tg
 from torch_geometric.datasets import ModelNet
@@ -127,7 +128,7 @@ class BaseClassifier(nn.Module):
             # assume we have normalized/softmaxed prob here.
             x = self.cls(x)  # [N, C]
             # ic(target)
-            loss = self.criterion(x.log()[mask], target[mask])
+            loss = self.criterion((x + 1e-8).log()[mask], target[mask])
             confidence, sel = x.max(dim=-1)  # [N, ]
             confidence = confidence
             # ic(sel[mask], target[mask])
@@ -202,7 +203,7 @@ class GATClassifier(nn.Module):
             x = activation(x)
 
         x = self.cls(x)  # assume we have normalized/softmaxed prob here.
-        loss = self.criterion(x.log(), target)
+        loss = self.criterion((x + 1e-8).log(), target)
         return loss, x
 
 
@@ -229,3 +230,13 @@ class GCNClassifier(BaseClassifier):
 
     def get_layer(self, i, o):
         return GCNConv(i, o)
+
+class SGCClassifier(BaseClassifier):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def process_fin(self, fin):
+        return [fin]
+    
+    def get_layer(self, i, o):
+        return SGConv(i, o, K=3)

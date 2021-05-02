@@ -145,13 +145,16 @@ if config.parallel and config.use_sbn:
 else:
     config.model = config.model.to(config.device)
 
-config.model_name = "%s-%s-%s-%s-%s" % (
+config.model_name = "%s-%s-%s-%s-%s-%s" % (
     config.model_name,
     config.dataset_type,
     (config.adversarial_method + "%.3f" % config.adversarial_noise_rate)
     if config.adversarial_noise_rate > 1e-5
     else "noadv",
-    "clean" if config.noise_rate < 1e-6 else "ln%.1f" % config.noise_rate,
+    "lnclean" if config.noise_rate < 1e-6 else "ln%.1f" % config.noise_rate,
+    "fclean"
+    if config.gaussian_noise_rate < 1e-6
+    else "fn%.1e" % config.gaussian_noise_rate,
     str(config.timestamp),
 )
 
@@ -199,7 +202,7 @@ def train(config, current_epoch: int, loader, train: bool = True):
     else:
         config.model.eval()
 
-    config.model.zero_grad()
+    config.optimizer.zero_grad()
 
     # forward pass metrics
     total_loss, total_acc, total_oacc, total_confidence, total_entropy = (
@@ -230,7 +233,7 @@ def train(config, current_epoch: int, loader, train: bool = True):
             batch = process_batch(
                 batch, config.device, config.parallel, config.dataset_type
             )
-            config.model.zero_grad()
+            config.optimizer.zero_grad()
             data_size = batch.x[batch.mask].shape[0]
             # forward pass
             loss, x, conf, correct, original_correct, ent = config.model(batch)
@@ -243,14 +246,16 @@ def train(config, current_epoch: int, loader, train: bool = True):
             if train:
                 # backward pass
                 loss.backward()
-                for param in config.model.parameters():
-                    if torch.any(torch.isnan(param.grad)):
-                        ic(param.data, param.grad, param.grad.max())
-                        assert False, "NaN detected!"
+                nn.utils.clip_grad_value_(config.model.parameters(), 100.0)
+                # for param in config.model.parameters():
+                #     if torch.any(torch.isnan(param.grad)):
+                #         ic(loss)
+                #         ic(param.data, param.grad, param.grad.max())
+                #         assert False, "NaN detected!"
                 config.optimizer.step()
                 config.scheduler.step()
                 current_lr = config.optimizer.param_groups[0]["lr"]
-                config.model.zero_grad()
+                config.optimizer.zero_grad()
             if current_epoch % config.report_iterations == 0:
                 if train:
                     ic(current_lr)
@@ -280,21 +285,22 @@ def train(config, current_epoch: int, loader, train: bool = True):
                         loss.backward()
                         adv = adv_batch.x
                         norm = adv.abs().max(dim=-1)[0].mean()  # mean max
-                        ic(norm, adv.abs().max())
+                        # ic(norm, adv.abs().max())
                         vadv = (
                             torch.sgn(adv.grad) * norm * config.adversarial_noise_rate
                         )  # adv batch
                         adv = vadv + adv
                         # ic(adv_batch.y, adv_batch.y.shape)
                         adv_batch.x = adv
-                        (
-                            adv_loss,
-                            _,
-                            adv_conf,
-                            adv_correct,
-                            adv_original_correct,
-                            adv_ent,
-                        ) = config.model(adv_batch)
+                        with torch.no_grad():
+                            (
+                                adv_loss,
+                                _,
+                                adv_conf,
+                                adv_correct,
+                                adv_original_correct,
+                                adv_ent,
+                            ) = config.model(adv_batch)
                         adv_loss = adv_loss.mean()
                         adv_conf = adv_conf.mean()
                         adv_ent = adv_ent.mean()
@@ -302,7 +308,7 @@ def train(config, current_epoch: int, loader, train: bool = True):
                         adv_oacc = adv_original_correct.sum() / data_size
                     else:
                         raise NotImplementedError
-                    config.model.zero_grad()
+                    config.optimizer.zero_grad() # clean grads after adversarial pass
                     if current_epoch % config.report_iterations == 0:
                         print(
                             colorama.Fore.MAGENTA
