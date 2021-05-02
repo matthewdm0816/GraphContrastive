@@ -264,6 +264,8 @@ def entropy(x, dim:int = -1):
     """
     total = x.sum(dim=dim, keepdim=True)
     probs = x / total
-    res = -x * x.log()
-    return x.sum(dim=dim)
+    res = -probs * probs.log()
+    return res.sum(dim=dim)
 
+def add_l2_noise(data, noise_rate):
+    raise NotImplementedError

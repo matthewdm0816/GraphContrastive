@@ -32,7 +32,7 @@ class MLP(nn.Module):
     Plain MLP with activation
     """
 
-    def __init__(self, fin, fout, activation=nn.ReLU, dropout=None, batchnorm=True):
+    def __init__(self, fin, fout, activation=nn.PReLU, dropout=None, batchnorm=True):
         super().__init__()
         if dropout is not None and batchnorm:
             assert isinstance(dropout, float)
@@ -59,9 +59,17 @@ class BaseClassifier(nn.Module):
     x=>FILTER=>ACTIVATION(if not output layer)=>...=>y
     """
 
-    def __init__(self, fin, n_cls, hidden_layers, criterion=nn.NLLLoss()):
+    def __init__(
+        self,
+        fin,
+        n_cls,
+        hidden_layers: list,
+        dropout: float = 0.3,
+        criterion=nn.NLLLoss(),
+    ):
         super().__init__()
         self.fin, self.hidden_layers = fin, self.process_fin(fin) + hidden_layers
+        self.dropout = dropout
         self.filters = nn.ModuleList(
             [self.get_layer(i, o) for i, o in layers(self.hidden_layers)]
         )
@@ -78,10 +86,17 @@ class BaseClassifier(nn.Module):
         return NotImplementedError
 
     def get_activation(self, o):
-        return NotImplementedError
+        return nn.Sequential(
+            nn.BatchNorm1d(o),
+            nn.Dropout(p=self.dropout) if self.dropout > 1e-5 else nn.Identity(),
+            nn.PReLU(),
+        )
 
     def get_classifier(self, i, o):
-        return nn.Sequential(nn.Linear(i, o), nn.Softmax(dim=-1))
+        return nn.Sequential(
+            MLP(i, o, batchnorm=False, activation=nn.Identity), 
+            nn.Softmax(dim=-1)
+        )
 
     # def calc_filter(x, filter, edge_index):
     #     return filter(x, edge_index=edge_index)
@@ -94,17 +109,17 @@ class BaseClassifier(nn.Module):
             data.y0.long(),
             data.batch,
             data.x,
-            data.mask,
+            data.mask.bool(),
         )
-        for i, (layer, activation) in enumerate(zip(self.filters, self.activations)):
-            # use static edges
-            # edge_index = knn_graph(x, k=32, batch=batch, loop=False)
-            if torch.any(torch.isnan(x)):
-                ic(i, self.filters[i-1], x.max(), x.median(), x.min())
-                assert False, "NaN detected!"
-            x = layer(x, edge_index=edge_index)
-            x = activation(x)
-            
+        with torch.autograd.detect_anomaly():
+            for i, (layer, activation) in enumerate(zip(self.filters, self.activations)):
+                # use static edges
+                # edge_index = knn_graph(x, k=32, batch=batch, loop=False)
+                if torch.any(torch.isnan(x)):
+                    ic(i, self.filters[i - 1], x.max(), x.median(), x.min())
+                    assert False, "NaN detected!"
+                x = layer(x, edge_index=edge_index)
+                x = activation(x)
 
         # assume we have normalized/softmaxed prob here.
         x = self.cls(x)  # [N, C]
@@ -113,7 +128,7 @@ class BaseClassifier(nn.Module):
         confidence, sel = x.max(dim=-1)  # [N, ]
         confidence = confidence
         # ic(sel[mask], target[mask])
-        correct = sel[mask].eq(target[mask]).float().sum() # [1, ]
+        correct = sel[mask].eq(target[mask]).float().sum()  # [1, ]
         original_correct = sel[mask].eq(clean_target[mask]).float().sum()
         ent = entropy(x, dim=-1)
         return loss, x, confidence, correct, original_correct, ent
@@ -130,9 +145,17 @@ class GATClassifier(nn.Module):
     ]
     """
 
-    def __init__(self, fin, n_cls, hidden_layers: list, criterion=nn.NLLLoss()):
+    def __init__(
+        self,
+        fin,
+        n_cls,
+        hidden_layers: list,
+        dropout: float = 0.3,
+        criterion=nn.NLLLoss(),
+    ):
         super().__init__()
         hidden_layers = [{"f": fin, "heads": 1}] + hidden_layers
+        self.dropout = dropout
         self.gats = nn.ModuleList(
             [
                 GATConv(
@@ -149,9 +172,11 @@ class GATClassifier(nn.Module):
         )
         self.activation = nn.ModuleList(
             [
-                nn.Sequential(nn.PReLU(), nn.BatchNorm1d(o["f"] * o["heads"]),)
-                if idx != len(hidden_layers) - 2
-                else nn.Identity()
+                nn.Sequential(
+                    nn.PReLU(),
+                    nn.BatchNorm1d(o["f"] * o["heads"]),
+                    nn.Dropout(p=self.dropout) if self.dropout > 1e-5 else nn.Identity,
+                )
                 for idx, (i, o) in enumerate(layers(hidden_layers))
             ]
         )
@@ -177,19 +202,25 @@ class GATClassifier(nn.Module):
 
 
 class DGCNNClassifier(BaseClassifier):
-    def __init(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
     def process_fin(self, fin):
         return [fin]
 
-    def get_activation(self, o):
-        return nn.Sequential(
-            nn.PReLU(), nn.BatchNorm1d(o)
-        )
-
     def get_layer(self, i, o):
         mlp = MLP(2 * i, o)
-        econv = EdgeConv(nn=mlp, aggr='mean')
+        econv = EdgeConv(nn=mlp, aggr="mean")
         # ic(econv, i, o)
         return econv
+
+
+class GCNClassifier(BaseClassifier):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def process_fin(self, fin):
+        return [fin]
+
+    def get_layer(self, i, o):
+        return GCNConv(i, o)
