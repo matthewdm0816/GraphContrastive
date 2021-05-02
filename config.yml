@@ -21,10 +21,10 @@ beg_epochs: 0
 total_epochs: 1000
 # label noise config
 noise_rate: 0.0
-# gaussian_noise_rate: 0.3
 gaussian_noise_rate: 0
-adversarial_noise_rate: 0.03137 # 8/255
-# adversarial_noise_rate: 0
+# gaussian_noise_rate: 0.3
+# adversarial_noise_rate: 0.03137 # 8/255
+adversarial_noise_rate: 0
 adversarial_method: FGSM
 # milestone config
 milestone_path: null

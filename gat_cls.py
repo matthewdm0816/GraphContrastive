@@ -66,6 +66,7 @@ class BaseClassifier(nn.Module):
         hidden_layers: list,
         dropout: float = 0.3,
         criterion=nn.NLLLoss(),
+        make_cls: bool=True
     ):
         super().__init__()
         self.fin, self.hidden_layers = fin, self.process_fin(fin) + hidden_layers
@@ -78,6 +79,7 @@ class BaseClassifier(nn.Module):
         )
         self.cls = self.get_classifier(hidden_layers[-1], n_cls)
         self.criterion = criterion
+        self.make_cls = make_cls
 
     def get_layer(self, i, o):
         raise NotImplementedError
@@ -120,18 +122,20 @@ class BaseClassifier(nn.Module):
                     assert False, "NaN detected!"
                 x = layer(x, edge_index=edge_index)
                 x = activation(x)
-
-        # assume we have normalized/softmaxed prob here.
-        x = self.cls(x)  # [N, C]
-        # ic(target)
-        loss = self.criterion(x.log()[mask], target[mask])
-        confidence, sel = x.max(dim=-1)  # [N, ]
-        confidence = confidence
-        # ic(sel[mask], target[mask])
-        correct = sel[mask].eq(target[mask]).float().sum()  # [1, ]
-        original_correct = sel[mask].eq(clean_target[mask]).float().sum()
-        ent = entropy(x, dim=-1)
-        return loss, x, confidence, correct, original_correct, ent
+        if self.make_cls:
+            # assume we have normalized/softmaxed prob here.
+            x = self.cls(x)  # [N, C]
+            # ic(target)
+            loss = self.criterion(x.log()[mask], target[mask])
+            confidence, sel = x.max(dim=-1)  # [N, ]
+            confidence = confidence
+            # ic(sel[mask], target[mask])
+            correct = sel[mask].eq(target[mask]).float().sum()  # [1, ]
+            original_correct = sel[mask].eq(clean_target[mask]).float().sum()
+            ent = entropy(x, dim=-1)
+            return loss, x, confidence, correct, original_correct, ent
+        else:
+            return x
 
 
 class GATClassifier(nn.Module):

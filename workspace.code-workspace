@@ -10,6 +10,8 @@
 	"settings": {
 		"cSpell.words": [
 			"cuda",
+			"like",
+			"randn",
 			"tqdm",
 			"trange",
 			"transductive"

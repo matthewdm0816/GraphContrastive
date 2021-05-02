@@ -71,13 +71,10 @@ if config.dataset_type in ["Cora", "Citeseer", "Pubmed"]:
     ic(config.dataset.data.train_mask.sum().item())
     ic(config.dataset.data.val_mask.sum().item())
     ic(config.dataset.data.test_mask.sum().item())
-    # add label noise
-    # if config.noise_rate > 1e-6:
-    uniform_noise(config.dataset.data, config.noise_rate)
-    # ------------------- add feature noise ------------------ #
 
-    if config.gaussian_noise_rate > 1e-6:
-        add_l2_noise(config.dataset.data, config.gaussian_noise_rate)
+    # ---------------- add label/feature noise --------------- #
+    uniform_noise(config.dataset.data, config.noise_rate)
+    gaussian_feature_noise(config.dataset.data, config.gaussian_noise_rate)
 
     config.train_dataset = config.dataset.data.clone()
     process_transductive_data(config.train_dataset, config.dataset.data.train_mask)
@@ -148,6 +145,16 @@ if config.parallel and config.use_sbn:
 else:
     config.model = config.model.to(config.device)
 
+config.model_name = "%s-%s-%s-%s-%s" % (
+    config.model_name,
+    config.dataset_type,
+    (config.adversarial_method + "%.3f" % config.adversarial_noise_rate)
+    if config.adversarial_noise_rate > 1e-5
+    else "noadv",
+    "clean" if config.noise_rate < 1e-6 else "ln%.1f" % config.noise_rate,
+    str(config.timestamp),
+)
+
 config.writer = SummaryWriter(comment=config.model_name)
 
 # --------------- optimizer configurations --------------- #
@@ -163,19 +170,7 @@ config.optimizer, config.scheduler = get_optimizer(
 
 # ---------------- milestone optional load --------------- #
 
-config.model_path = os.path.join(
-    "model",
-    "%s-%s-%s-%s-%s"
-    % (
-        config.model_name,
-        config.dataset_type,
-        (config.adversarial_method + "%.3f" % config.adversarial_noise_rate)
-        if config.adversarial_noise_rate > 1e-5
-        else "noadv",
-        "clean" if config.noise_rate < 1e-6 else "ln%.1f" % config.noise_rate,
-        str(config.timestamp),
-    ),
-)
+config.model_path = os.path.join("model", config.model_name)
 check_dir(config.model_path)
 
 if config.milestone_path is not None:
@@ -302,9 +297,25 @@ def train(config, current_epoch: int, loader, train: bool = True):
                         adv_oacc = adv_original_correct.sum() / data_size
                     else:
                         raise NotImplementedError
+                    if current_epoch % config.report_iterations == 0:
+                        print(
+                            colorama.Fore.MAGENTA
+                            + "[%d%s/%d]AdvLOSS: %.2e, AdvNACC: %.2f%%, AdvCACC: %.2f%%, AdvCONF: %.2f, AdvENT: %.2f"
+                            % (
+                                epoch,
+                                "t" if train else "e",
+                                i,
+                                adv_loss.detach().item(),
+                                100.0 * adv_acc.detach().item(),
+                                100.0 * adv_oacc.detach().item(),
+                                adv_conf.detach().item(),
+                                adv_ent.detach().item(),
+                            )
+                        )
                 else:
                     # fill stats with 0.
                     adv_loss, adv_conf, adv_acc, adv_oacc, adv_ent = torch.zeros([5])
+
                 # record these adversarial metrics
                 with torch.no_grad():
                     adv_total_loss.add(adv_loss)
@@ -312,22 +323,6 @@ def train(config, current_epoch: int, loader, train: bool = True):
                     adv_total_oacc.add(adv_oacc)
                     adv_total_confidence.add(adv_conf)
                     adv_total_entropy.add(adv_ent)
-
-                if current_epoch % config.report_iterations == 0:
-                    print(
-                        colorama.Fore.MAGENTA
-                        + "[%d%s/%d]AdvLOSS: %.2e, AdvNACC: %.2f%%, AdvCACC: %.2f%%, AdvCONF: %.2f, AdvENT: %.2f"
-                        % (
-                            epoch,
-                            "t" if train else "e",
-                            i,
-                            adv_loss.detach().item(),
-                            100.0 * adv_acc.detach().item(),
-                            100.0 * adv_oacc.detach().item(),
-                            adv_conf.detach().item(),
-                            adv_ent.detach().item(),
-                        )
-                    )
 
             with torch.no_grad():
                 total_loss.add(loss)

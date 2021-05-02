@@ -1,4 +1,4 @@
-----------------------  -----------------------------------------------------------------------------------------------------------------------------------------
+----------------------  ----------------------------------------------------------------------------------------------------------------------------------------------------------
 debug                   False
 dataset_type            Pubmed
 dataset_path            /home1/wtmo/dataset/
@@ -9,7 +9,7 @@ batch_size_single       32
 use_sbn                 True
 model_type              GCN
 hidden_layers           [512, 1024, 512]
-model_name              GCNClassifier512-1024-512
+model_name              GCNClassifier512-1024-512-Pubmed-noadv-clean-66
 lr                      0.0003
 T_0                     150
 weight_decay            0.0005
@@ -19,7 +19,7 @@ beg_epochs              0
 total_epochs            1000
 noise_rate              0.0
 gaussian_noise_rate     0
-adversarial_noise_rate  0.03137
+adversarial_noise_rate  0
 adversarial_method      FGSM
 milestone_path
 milestone_save_epochs   10
@@ -29,16 +29,16 @@ ngpu                    1
 parallel                False
 batch_size              32
 device                  cuda:1
-timestamp               57
+timestamp               66
 dataset                 Pubmed()
 fin                     500
 n_cls                   3
-train_dataset           Data(edge_index=[2, 88648], mask=[19717], test_mask=[19717], train_mask=[19717], val_mask=[19717], x=[19717, 500], y=[19717], y0=[19717])
-val_dataset             Data(edge_index=[2, 88648], mask=[19717], test_mask=[19717], train_mask=[19717], val_mask=[19717], x=[19717, 500], y=[19717], y0=[19717])
-test_dataset            Data(edge_index=[2, 88648], mask=[19717], test_mask=[19717], train_mask=[19717], val_mask=[19717], x=[19717, 500], y=[19717], y0=[19717])
-train_loader            <torch_geometric.data.dataloader.DataLoader object at 0x7fefc07ac070>
-val_loader              <torch_geometric.data.dataloader.DataLoader object at 0x7fefc07ac340>
-test_loader             <torch_geometric.data.dataloader.DataLoader object at 0x7fefc07ac490>
+train_dataset           Data(edge_index=[2, 88648], mask=[19717], test_mask=[19717], train_mask=[19717], val_mask=[19717], x=[19717, 500], x0=[19717, 500], y=[19717], y0=[19717])
+val_dataset             Data(edge_index=[2, 88648], mask=[19717], test_mask=[19717], train_mask=[19717], val_mask=[19717], x=[19717, 500], x0=[19717, 500], y=[19717], y0=[19717])
+test_dataset            Data(edge_index=[2, 88648], mask=[19717], test_mask=[19717], train_mask=[19717], val_mask=[19717], x=[19717, 500], x0=[19717, 500], y=[19717], y0=[19717])
+train_loader            <torch_geometric.data.dataloader.DataLoader object at 0x7f1a34a25070>
+val_loader              <torch_geometric.data.dataloader.DataLoader object at 0x7f1a34a25340>
+test_loader             <torch_geometric.data.dataloader.DataLoader object at 0x7f1a34a25430>
 batch_cnt               1
 model                   GCNClassifier(
                           (filters): ModuleList(
@@ -74,7 +74,7 @@ model                   GCNClassifier(
                           )
                           (criterion): NLLLoss()
                         )
-writer                  <tensorboardX.writer.SummaryWriter object at 0x7fefc07ac5b0>
+writer                  <tensorboardX.writer.SummaryWriter object at 0x7f1a34bde130>
 optimizer               SGD (
                         Parameter Group 0
                             dampening: 0
@@ -84,6 +84,6 @@ optimizer               SGD (
                             nesterov: True
                             weight_decay: 0.0005
                         )
-scheduler               <torch.optim.lr_scheduler.CosineAnnealingWarmRestarts object at 0x7fefc09dc880>
-model_path              model/GCNClassifier512-1024-512-Pubmed-FGSM0.031-clean-57
-----------------------  -----------------------------------------------------------------------------------------------------------------------------------------
+scheduler               <torch.optim.lr_scheduler.CosineAnnealingWarmRestarts object at 0x7f1a34bd58e0>
+model_path              model/GCNClassifier512-1024-512-Pubmed-noadv-clean-66
+----------------------  ----------------------------------------------------------------------------------------------------------------------------------------------------------

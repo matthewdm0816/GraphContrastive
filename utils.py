@@ -211,15 +211,28 @@ class Counter:
 def uniform_noise(data, noise_rate: float = 0.4):
     r"""
     for each class label y, add uniform noise
+    only on train data!
     """
     data.y0 = data.y.clone()  # save original labels
+    if noise_rate < 1e-5: return
     n_cls = data.y.max() + 1
     # noise_rate to be 1, else 0.
     dist = Bernoulli(torch.tensor([noise_rate]))
-    perm_mask = dist.sample(sample_shape=data.y.shape).view(-1)
-    perm = torch.randint(0, n_cls, size=data.y.shape)
+    perm_mask = dist.sample(sample_shape=data.y[data.train_mask].shape).view(-1)
+    perm = torch.randint(0, n_cls, size=data.y[data.train_mask].shape)
     # ic(perm_mask.shape, perm.shape)
-    data.y = data.y * (1 - perm_mask) + perm * perm_mask
+    data.y[data.train_mask] = (data.y[data.train_mask] * (1 - perm_mask) + perm * perm_mask).long()
+
+def gaussian_feature_noise(data, noise_rate: float = 0.3):
+    r"""
+    for each instance feature x, add gaussian noise
+    only on train data!
+    """
+    data.x0 = data.x.clone()  # save original labels
+    if noise_rate < 1e-5: return
+    norm = data.x[data.train_mask].norm(dim=-1).mean()
+    noise = torch.randn_like(data.x[data.train_mask]) * norm * noise_rate
+    data.x[data.train_mask] = data.x[data.train_mask] + noise
 
 
 def parallel_cuda(batch, device):
@@ -266,6 +279,3 @@ def entropy(x, dim:int = -1):
     probs = x / total
     res = -probs * probs.log()
     return res.sum(dim=dim)
-
-def add_l2_noise(data, noise_rate):
-    raise NotImplementedError
