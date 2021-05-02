@@ -106,13 +106,14 @@ class BaseClassifier(nn.Module):
 
     def forward(self, data):
         # print(data)
-        target, edge_index, clean_target, batch, x, mask = (
+        target, edge_index, clean_target, batch, x, mask, ln_mask = (
             data.y.long(),
             data.edge_index.long(),
             data.y0.long(),
             data.batch,
             data.x,
             data.mask.bool(),
+            data.ln_mask.bool()
         )
         # with torch.autograd.detect_anomaly():
         for i, (layer, activation) in enumerate(zip(self.filters, self.activations)):

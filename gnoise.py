@@ -45,7 +45,7 @@ config = YAMLParser(config_file).data
 
 assert config.optimizer_type in ["Adam", "SGD"]
 assert config.dataset_type in ["Cora", "Citeseer", "Pubmed"]
-assert config.model_type in ["DGCNN", "GAT", "GCN"]
+assert config.model_type in ["DGCNN", "GAT", "GCN", "SGC"]
 
 # ---------------- general configurations ---------------- #
 
@@ -73,15 +73,15 @@ if config.dataset_type in ["Cora", "Citeseer", "Pubmed"]:
     ic(config.dataset.data.test_mask.sum().item())
 
     # ---------------- add label/feature noise --------------- #
-    uniform_noise(config.dataset.data, config.noise_rate)
+    config.ln_mask = uniform_noise(config.dataset.data, config.noise_rate) # NOTE: 1 if is noisy
     gaussian_feature_noise(config.dataset.data, config.gaussian_noise_rate)
 
     config.train_dataset = config.dataset.data.clone()
-    process_transductive_data(config.train_dataset, config.dataset.data.train_mask)
+    process_transductive_data(config.train_dataset, config.dataset.data.train_mask, config.ln_mask)
     config.val_dataset = config.dataset.data.clone()
-    process_transductive_data(config.val_dataset, config.dataset.data.val_mask)
+    process_transductive_data(config.val_dataset, config.dataset.data.val_mask, config.ln_mask)
     config.test_dataset = config.dataset.data.clone()
-    process_transductive_data(config.test_dataset, config.dataset.data.test_mask)
+    process_transductive_data(config.test_dataset, config.dataset.data.test_mask, config.ln_mask)
     ic(config.train_dataset)
     # FIXME: single data dataset for now
     if not config.parallel:
@@ -129,6 +129,13 @@ elif config.model_type == "GAT":
     )
 elif config.model_type == "GCN":
     config.model = GCNClassifier(
+        config.fin,
+        config.n_cls,
+        hidden_layers=config.hidden_layers,
+        dropout=config.dropout,
+    )
+elif config.model_type == "SGC":
+    config.model = SGCClassifier(
         config.fin,
         config.n_cls,
         hidden_layers=config.hidden_layers,

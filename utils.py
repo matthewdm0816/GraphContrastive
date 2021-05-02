@@ -176,13 +176,14 @@ def init_weights(model):
             m.bias.data.zero_()
 
 
-def process_transductive_data(data, mask):
+def process_transductive_data(data, mask, ln_mask):
     # data.edge_index = data.edge_index[mask]
     # ic(data)
     # for key in data.keys:
     #     if key in ['x', 'y', 'y0']:
     #         data[key] = data[key][mask]
     data.mask = mask
+    data.ln_mask = ln_mask
 
 
 def check_dir(path, color=None):

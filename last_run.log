@@ -7,9 +7,9 @@ gpu_id                  1
 gpu_ids                 [1]
 batch_size_single       32
 use_sbn                 True
-model_type              GCN
-hidden_layers           [512, 1024, 512]
-model_name              GCNClassifier512-1024-512-Pubmed-noadv-ln0.4-fclean-117
+model_type              SGC
+hidden_layers           [1024]
+model_name              SGCClassifier1024*3-Pubmed-FGSM0.031-lnclean-fclean-127
 lr                      0.0001
 T_0                     200
 weight_decay            0.0005
@@ -17,9 +17,9 @@ dropout                 0.5
 T_mult                  1
 beg_epochs              0
 total_epochs            1000
-noise_rate              0.4
+noise_rate              0
 gaussian_noise_rate     0
-adversarial_noise_rate  0
+adversarial_noise_rate  0.03137
 adversarial_method      FGSM
 milestone_path
 milestone_save_epochs   10
@@ -29,36 +29,25 @@ ngpu                    1
 parallel                False
 batch_size              32
 device                  cuda:1
-timestamp               117
+timestamp               127
 dataset                 Pubmed()
 fin                     500
 n_cls                   3
+ln_mask
 train_dataset           Data(edge_index=[2, 88648], mask=[19717], test_mask=[19717], train_mask=[19717], val_mask=[19717], x=[19717, 500], x0=[19717, 500], y=[19717], y0=[19717])
 val_dataset             Data(edge_index=[2, 88648], mask=[19717], test_mask=[19717], train_mask=[19717], val_mask=[19717], x=[19717, 500], x0=[19717, 500], y=[19717], y0=[19717])
 test_dataset            Data(edge_index=[2, 88648], mask=[19717], test_mask=[19717], train_mask=[19717], val_mask=[19717], x=[19717, 500], x0=[19717, 500], y=[19717], y0=[19717])
-train_loader            <torch_geometric.data.dataloader.DataLoader object at 0x7f2ced892370>
-val_loader              <torch_geometric.data.dataloader.DataLoader object at 0x7f2ced6a2340>
-test_loader             <torch_geometric.data.dataloader.DataLoader object at 0x7f2ced6a2250>
+train_loader            <torch_geometric.data.dataloader.DataLoader object at 0x7f31edb20a30>
+val_loader              <torch_geometric.data.dataloader.DataLoader object at 0x7f31edab07c0>
+test_loader             <torch_geometric.data.dataloader.DataLoader object at 0x7f31edab0910>
 batch_cnt               1
-model                   GCNClassifier(
+model                   SGCClassifier(
                           (filters): ModuleList(
-                            (0): GCNConv(500, 512)
-                            (1): GCNConv(512, 1024)
-                            (2): GCNConv(1024, 512)
+                            (0): SGConv(500, 1024, K=3)
                           )
                           (activations): ModuleList(
                             (0): Sequential(
-                              (0): BatchNorm1d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-                              (1): Dropout(p=0.5, inplace=False)
-                              (2): PReLU(num_parameters=1)
-                            )
-                            (1): Sequential(
                               (0): BatchNorm1d(1024, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-                              (1): Dropout(p=0.5, inplace=False)
-                              (2): PReLU(num_parameters=1)
-                            )
-                            (2): Sequential(
-                              (0): BatchNorm1d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
                               (1): Dropout(p=0.5, inplace=False)
                               (2): PReLU(num_parameters=1)
                             )
@@ -66,7 +55,7 @@ model                   GCNClassifier(
                           (cls): Sequential(
                             (0): MLP(
                               (net): Sequential(
-                                (0): Linear(in_features=512, out_features=3, bias=True)
+                                (0): Linear(in_features=1024, out_features=3, bias=True)
                                 (1): Identity()
                               )
                             )
@@ -74,7 +63,7 @@ model                   GCNClassifier(
                           )
                           (criterion): NLLLoss()
                         )
-writer                  <tensorboardX.writer.SummaryWriter object at 0x7f2ced6a25e0>
+writer                  <tensorboardX.writer.SummaryWriter object at 0x7f31edab0e50>
 optimizer               AdamW (
                         Parameter Group 0
                             amsgrad: False
@@ -84,6 +73,6 @@ optimizer               AdamW (
                             lr: 9.999383162408304e-05
                             weight_decay: 0.0005
                         )
-scheduler               <torch.optim.lr_scheduler.CosineAnnealingWarmRestarts object at 0x7f2ced7338e0>
-model_path              model/GCNClassifier512-1024-512-Pubmed-noadv-ln0.4-fclean-117
+scheduler               <torch.optim.lr_scheduler.CosineAnnealingWarmRestarts object at 0x7f31eda71d00>
+model_path              model/SGCClassifier1024*3-Pubmed-FGSM0.031-lnclean-fclean-127
 ----------------------  ----------------------------------------------------------------------------------------------------------------------------------------------------------
