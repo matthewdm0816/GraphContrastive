@@ -14,13 +14,13 @@ gpu_id: 1
 gpu_ids: [1]
 batch_size_single: 32
 use_sbn: true
-model_type: GCN
-hidden_layers: [512, 1024, 512]
-model_name: GCNClassifier512-1024-512
-# model_type: SGC
-# hidden_layers: [1024] # single layer, K=3 by default
-# model_name: SGCClassifier1024*3
-lr: 0.0003
+# model_type: GCN
+# hidden_layers: [512, 1024, 512]
+# model_name: GCNClassifier512-1024-512
+model_type: SGC
+hidden_layers: [1024] # single layer, K=3 by default
+model_name: SGCClassifier1024*3
+lr: 0.0001
 T_0: 200
 weight_decay: 0.0005
 dropout: 0.5
@@ -30,7 +30,7 @@ total_epochs: 1000
 
 # ------------------ label noise config ------------------ #
 
-noise_rate: 0
+noise_rate: 0.6
 gaussian_noise_rate: 0
 # gaussian_noise_rate: 0.3
 # adversarial_noise_rate: 0.03137 # 8/255

@@ -7,17 +7,17 @@ gpu_id                  1
 gpu_ids                 [1]
 batch_size_single       32
 use_sbn                 True
-model_type              GCN
-hidden_layers           [512, 1024, 512]
-model_name              GCNClassifier512-1024-512-Pubmed-noadv-lnclean-fclean-166
-lr                      0.0003
+model_type              SGC
+hidden_layers           [1024]
+model_name              SGCClassifier1024*3-Pubmed-noadv-ln0.6-fclean-173
+lr                      0.0001
 T_0                     200
 weight_decay            0.0005
 dropout                 0.5
 T_mult                  1
 beg_epochs              0
 total_epochs            1000
-noise_rate              0
+noise_rate              0.6
 gaussian_noise_rate     0
 adversarial_noise_rate  0
 adversarial_method      FGSM
@@ -29,47 +29,31 @@ ngpu                    1
 parallel                False
 batch_size              32
 device                  cuda:1
-timestamp               166
+timestamp               173
 dataset                 Pubmed()
 fin                     500
 n_cls                   3
-ln_mask                 tensor([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+ln_mask                 tensor([0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1, 0, 0, 0, 1, 0, 1, 1, 0,
+                                1, 1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1,
+                                1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1])
 train_dataset           Data(edge_index=[2, 88648], ln_mask=[60], mask=[19717], test_mask=[19717], train_mask=[19717], val_mask=[19717], x=[19717, 500], x0=[19717, 500], y=[19717], y0=[19717])
 val_dataset             Data(edge_index=[2, 88648], ln_mask=[60], mask=[19717], test_mask=[19717], train_mask=[19717], val_mask=[19717], x=[19717, 500], x0=[19717, 500], y=[19717], y0=[19717])
 test_dataset            Data(edge_index=[2, 88648], ln_mask=[60], mask=[19717], test_mask=[19717], train_mask=[19717], val_mask=[19717], x=[19717, 500], x0=[19717, 500], y=[19717], y0=[19717])
-train_loader            <torch_geometric.data.dataloader.DataLoader object at 0x7f01d9fe0070>
-val_loader              <torch_geometric.data.dataloader.DataLoader object at 0x7f01d9fe0340>
-test_loader             <torch_geometric.data.dataloader.DataLoader object at 0x7f01d9fe0490>
+train_loader            <torch_geometric.data.dataloader.DataLoader object at 0x7fb5fe167070>
+val_loader              <torch_geometric.data.dataloader.DataLoader object at 0x7fb5fe167340>
+test_loader             <torch_geometric.data.dataloader.DataLoader object at 0x7fb5fe167490>
 batch_cnt               1
-model                   GCNClassifier(
+model                   SGCClassifier(
                           (filters): ModuleList(
-                            (0): GCNConv(500, 512)
-                            (1): GCNConv(512, 1024)
-                            (2): GCNConv(1024, 512)
+                            (0): SGConv(500, 1024, K=3)
                           )
                           (activations): ModuleList(
-                            (0): Sequential(
-                              (0): BatchNorm1d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-                              (1): Dropout(p=0.5, inplace=False)
-                              (2): PReLU(num_parameters=1)
-                            )
-                            (1): Sequential(
-                              (0): BatchNorm1d(1024, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-                              (1): Dropout(p=0.5, inplace=False)
-                              (2): PReLU(num_parameters=1)
-                            )
-                            (2): Sequential(
-                              (0): BatchNorm1d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-                              (1): Dropout(p=0.5, inplace=False)
-                              (2): PReLU(num_parameters=1)
-                            )
+                            (0): Identity()
                           )
                           (cls): Sequential(
                             (0): MLP(
                               (net): Sequential(
-                                (0): Linear(in_features=512, out_features=3, bias=True)
+                                (0): Linear(in_features=1024, out_features=3, bias=True)
                                 (1): Identity()
                               )
                             )
@@ -77,16 +61,16 @@ model                   GCNClassifier(
                           )
                           (criterion): NLLLoss()
                         )
-writer                  <tensorboardX.writer.SummaryWriter object at 0x7f01d9fe0640>
+writer                  <tensorboardX.writer.SummaryWriter object at 0x7fb5fe167940>
 optimizer               AdamW (
                         Parameter Group 0
                             amsgrad: False
                             betas: (0.9, 0.999)
                             eps: 1e-08
-                            initial_lr: 0.0003
-                            lr: 0.0002999814948722491
+                            initial_lr: 0.0001
+                            lr: 9.999383162408304e-05
                             weight_decay: 0.0005
                         )
-scheduler               <torch.optim.lr_scheduler.CosineAnnealingWarmRestarts object at 0x7f01da09b2b0>
-model_path              model/GCNClassifier512-1024-512-Pubmed-noadv-lnclean-fclean-166
+scheduler               <torch.optim.lr_scheduler.CosineAnnealingWarmRestarts object at 0x7fb5fe29c2e0>
+model_path              model/SGCClassifier1024*3-Pubmed-noadv-ln0.6-fclean-173
 ----------------------  ------------------------------------------------------------------------------------------------------------------------------------------------------------------------
