@@ -201,7 +201,7 @@ class Counter:
 
     def add(self, value):
         self.count += 1
-        self.sum += value
+        self.sum += value.detach().item()
 
     @property
     def mean(self):
@@ -231,7 +231,8 @@ def gaussian_feature_noise(data, noise_rate: float = 0.3):
     data.x0 = data.x.clone()  # save original labels
     if noise_rate < 1e-5: return
     norm = data.x[data.train_mask].norm(dim=-1).mean()
-    noise = torch.randn_like(data.x[data.train_mask]) * norm * noise_rate
+    # ic(norm)
+    noise = torch.randn_like(data.x[data.train_mask]).clamp(-3, 3) * norm * noise_rate
     data.x[data.train_mask] = data.x[data.train_mask] + noise
 
 

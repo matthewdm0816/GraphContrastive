@@ -113,15 +113,16 @@ class BaseClassifier(nn.Module):
             data.x,
             data.mask.bool(),
         )
-        with torch.autograd.detect_anomaly():
-            for i, (layer, activation) in enumerate(zip(self.filters, self.activations)):
-                # use static edges
-                # edge_index = knn_graph(x, k=32, batch=batch, loop=False)
-                if torch.any(torch.isnan(x)):
-                    ic(i, self.filters[i - 1], x.max(), x.median(), x.min())
-                    assert False, "NaN detected!"
-                x = layer(x, edge_index=edge_index)
-                x = activation(x)
+        # with torch.autograd.detect_anomaly():
+        for i, (layer, activation) in enumerate(zip(self.filters, self.activations)):
+            # use static edges
+            # edge_index = knn_graph(x, k=32, batch=batch, loop=False)
+            if torch.any(torch.isnan(x)):
+                ic(i, self.filters[i - 1], x.max(), x.median(), x.min())
+                ic([param.data for param in self.filters[i - 1].parameters()])
+                assert False, "NaN detected!"
+            x = layer(x, edge_index=edge_index)
+            x = activation(x)
         if self.make_cls:
             # assume we have normalized/softmaxed prob here.
             x = self.cls(x)  # [N, C]

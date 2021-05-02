@@ -57,8 +57,24 @@ class GraphMoCo(nn.Module):
             param_k.data = param_k.data * self.m + param_q.data * (1. - self.m)
 
     def forward(self, data):
-        x, mask = data.x, data.mask
+        x, mask, ei = data.x, data.mask, data.edge_index
+        eic = data.edge_index_corrupt
+
+        # compute query features
+        q = self.encoder_q(x, edge_index = ei) # [N, F]
+        q = nn.functional.normalize(q, dim=1)
+
+        # compute key features
+        with torch.no_grad():
+            self._momentum_update_key_encoder()
+            k = self.encoder_k(x, edge_index = eic) # [N, F]
         
+        # compute logits
+        # Einstein sum is more intuitive
+        # positive logits: Nx1
+        l_pos = torch.einsum('nc,nc->n', [q, ]).unsqueeze(-1)
+        # negative logits: NxK
+        l_neg = torch.einsum('nc,ck->nk', [q, k])
 
 # utils
 @torch.no_grad()

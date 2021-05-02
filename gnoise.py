@@ -196,9 +196,10 @@ def train(config, current_epoch: int, loader, train: bool = True):
     """
     if train:
         config.model.train()
-        config.model.zero_grad()
     else:
         config.model.eval()
+
+    config.model.zero_grad()
 
     # forward pass metrics
     total_loss, total_acc, total_oacc, total_confidence, total_entropy = (
@@ -242,10 +243,14 @@ def train(config, current_epoch: int, loader, train: bool = True):
             if train:
                 # backward pass
                 loss.backward()
+                for param in config.model.parameters():
+                    if torch.any(torch.isnan(param.grad)):
+                        ic(param.data, param.grad, param.grad.max())
+                        assert False, "NaN detected!"
                 config.optimizer.step()
                 config.scheduler.step()
                 current_lr = config.optimizer.param_groups[0]["lr"]
-            config.model.zero_grad()
+                config.model.zero_grad()
             if current_epoch % config.report_iterations == 0:
                 if train:
                     ic(current_lr)
@@ -297,6 +302,7 @@ def train(config, current_epoch: int, loader, train: bool = True):
                         adv_oacc = adv_original_correct.sum() / data_size
                     else:
                         raise NotImplementedError
+                    config.model.zero_grad()
                     if current_epoch % config.report_iterations == 0:
                         print(
                             colorama.Fore.MAGENTA

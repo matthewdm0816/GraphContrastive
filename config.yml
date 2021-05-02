@@ -4,7 +4,7 @@ debug: false
 dataset_type: Pubmed
 dataset_path: /home1/wtmo/dataset/
 # training config
-optimizer_type: SGD
+optimizer_type: Adam
 gpu_id: 1
 gpu_ids: [1]
 batch_size_single: 32
@@ -21,8 +21,8 @@ beg_epochs: 0
 total_epochs: 1000
 # label noise config
 noise_rate: 0.0
-gaussian_noise_rate: 0
-# gaussian_noise_rate: 0.3
+# gaussian_noise_rate: 0
+gaussian_noise_rate: 0.3
 # adversarial_noise_rate: 0.03137 # 8/255
 adversarial_noise_rate: 0
 adversarial_method: FGSM
