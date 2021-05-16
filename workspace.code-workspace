@@ -1,0 +1,20 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../amafilter"
+		}
+	],
+	"settings": {
+		"cSpell.words": [
+			"cuda",
+			"like",
+			"randn",
+			"tqdm",
+			"trange",
+			"transductive"
+		]
+	}
+}

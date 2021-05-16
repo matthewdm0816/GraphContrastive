@@ -1,0 +1,99 @@
+Using 16/16 cores/threads of CPU
+Running in Single-GPU mode
+Using optimizer type Adam
+
+---------------------  -----------------------------------------------------------------------------------------------------------------------------------------
+debug                  False
+dataset_type           Pubmed
+dataset_path           /home1/wtmo/dataset/
+optimizer_type         Adam
+gpu_id                 0
+gpu_ids                [0]
+batch_size_single      32
+use_sbn                True
+model_type             GCN
+hidden_layers          [1024, 2048, 1024]
+model_name             GCNClassifier1024-2048-1024-Pubmed
+lr                     0.0003
+T_0                    150
+weight_decay           0.0005
+dropout                0.5
+T_mult                 1
+beg_epochs             0
+total_epochs           500
+noise_rate             0.0
+milestone_path
+milestone_save_epochs  10
+report_iterations      10
+tabulate_path          last_run.log
+ngpu                   1
+parallel               False
+batch_size             32
+device                 cuda:0
+timestamp              20
+dataset                Pubmed()
+fin                    500
+n_cls                  3
+train_dataset          Data(edge_index=[2, 88648], mask=[19717], test_mask=[19717], train_mask=[19717], val_mask=[19717], x=[19717, 500], y=[19717], y0=[19717])
+val_dataset            Data(edge_index=[2, 88648], mask=[19717], test_mask=[19717], train_mask=[19717], val_mask=[19717], x=[19717, 500], y=[19717], y0=[19717])
+test_dataset           Data(edge_index=[2, 88648], mask=[19717], test_mask=[19717], train_mask=[19717], val_mask=[19717], x=[19717, 500], y=[19717], y0=[19717])
+train_loader           <torch_geometric.data.dataloader.DataLoader object at 0x7f80956c67f0>
+val_loader             <torch_geometric.data.dataloader.DataLoader object at 0x7f809548b6a0>
+test_loader            <torch_geometric.data.dataloader.DataLoader object at 0x7f809548b490>
+batch_cnt              1
+model                  GCNClassifier(
+                         (filters): ModuleList(
+                           (0): GCNConv(500, 1024)
+                           (1): GCNConv(1024, 2048)
+                           (2): GCNConv(2048, 1024)
+                         )
+                         (activations): ModuleList(
+                           (0): Sequential(
+                             (0): PReLU(num_parameters=1)
+                             (1): BatchNorm1d(1024, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+                             (2): Dropout(p=0.5, inplace=False)
+                           )
+                           (1): Sequential(
+                             (0): PReLU(num_parameters=1)
+                             (1): BatchNorm1d(2048, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+                             (2): Dropout(p=0.5, inplace=False)
+                           )
+                           (2): Sequential(
+                             (0): PReLU(num_parameters=1)
+                             (1): BatchNorm1d(1024, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+                             (2): Dropout(p=0.5, inplace=False)
+                           )
+                         )
+                         (cls): Sequential(
+                           (0): MLP(
+                             (net): Sequential(
+                               (0): Linear(in_features=1024, out_features=3, bias=True)
+                               (1): BatchNorm1d(3, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+                               (2): Identity()
+                             )
+                           )
+                           (1): Softmax(dim=-1)
+                         )
+                         (criterion): NLLLoss()
+                       )
+writer                 <tensorboardX.writer.SummaryWriter object at 0x7f809548bd00>
+optimizer              Adam (
+                       Parameter Group 0
+                           amsgrad: False
+                           betas: (0.9, 0.999)
+                           eps: 1e-08
+                           initial_lr: 0.0003
+                           lr: 0.00029996721217948936
+                           weight_decay: 0.0005
+                       )
+scheduler              <torch.optim.lr_scheduler.CosineAnnealingWarmRestarts object at 0x7f80954cbdf0>
+model_path             model/GCNClassifier1024-2048-1024-Pubmed-clean-20
+---------------------  -----------------------------------------------------------------------------------------------------------------------------------------
+[0t/0]LOSS: 1.75e+00, NACC: 23.33%, CACC: 23.33%, CONF: 0.57, ENT: 0.90
+[0e/0]LOSS: 1.10e+00, NACC: 43.10%, CACC: 43.10%, CONF: 0.34, ENT: 1.10
+[10t/0]LOSS: 1.59e-01, NACC: 100.00%, CACC: 100.00%, CONF: 0.65, ENT: 0.81
+[10e/0]LOSS: 1.06e+00, NACC: 41.70%, CACC: 41.70%, CONF: 0.37, ENT: 1.09
+[20t/0]LOSS: 9.26e-02, NACC: 100.00%, CACC: 100.00%, CONF: 0.64, ENT: 0.81
+[20e/0]LOSS: 1.05e+00, NACC: 42.40%, CACC: 42.40%, CONF: 0.39, ENT: 1.08
+[30t/0]LOSS: 4.60e-02, NACC: 100.00%, CACC: 100.00%, CONF: 0.63, ENT: 0.82
+[30e/0]LOSS: 1.04e+00, NACC: 42.00%, CACC: 42.00%, CONF: 0.42, ENT: 1.06

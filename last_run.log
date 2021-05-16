@@ -1,0 +1,86 @@
+----------------------  ------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+debug                   False
+dataset_type            Pubmed
+dataset_path            /home/wtmo/dataset/
+optimizer_type          Adam
+gpu_id                  2
+gpu_ids                 ['2s']
+batch_size_single       32
+use_sbn                 True
+model_type              SGC
+hidden_layers           [512]
+model_name              SGCClassifier512*3-Pubmed-noadv-ln0.2-fclean-241
+lr                      0.0003
+T_0                     200
+weight_decay            0.0005
+dropout                 0.5
+T_mult                  1
+beg_epochs              0
+total_epochs            1000
+noise_rate              0.2
+gaussian_noise_rate     0
+adversarial_noise_rate  0
+adversarial_method      FGSM
+lds_alpha               1.0
+vat_xi                  0.5
+vat_eps                 1.0
+vat_ip                  1
+active_loss
+useNCEandRCE            False
+alpha_NCE               1.0
+beta_RCE                1.0
+knn                     10
+khop                    2
+milestone_path
+milestone_save_epochs   10
+report_iterations       10
+tabulate_path           last_run.log
+ngpu                    1
+parallel                False
+batch_size              32
+device                  cuda:2
+timestamp               241
+dataset                 Pubmed()
+fin                     500
+n_cls                   3
+ln_mask                 tensor([0, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                                0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+                                1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0])
+train_dataset           Data(edge_index=[2, 88648], ln_mask=[60], mask=[19717], test_mask=[19717], train_mask=[19717], val_mask=[19717], x=[19717, 500], x0=[19717, 500], y=[19717], y0=[19717])
+val_dataset             Data(edge_index=[2, 88648], ln_mask=[60], mask=[19717], test_mask=[19717], train_mask=[19717], val_mask=[19717], x=[19717, 500], x0=[19717, 500], y=[19717], y0=[19717])
+test_dataset            Data(edge_index=[2, 88648], ln_mask=[60], mask=[19717], test_mask=[19717], train_mask=[19717], val_mask=[19717], x=[19717, 500], x0=[19717, 500], y=[19717], y0=[19717])
+train_loader            <torch_geometric.data.dataloader.DataLoader object at 0x7f3929047070>
+val_loader              <torch_geometric.data.dataloader.DataLoader object at 0x7f3929047340>
+test_loader             <torch_geometric.data.dataloader.DataLoader object at 0x7f3929047490>
+batch_cnt               1
+model                   SGCClassifier(
+                          (filters): ModuleList(
+                            (0): SGConv(500, 512, K=3)
+                          )
+                          (activations): ModuleList(
+                            (0): Identity()
+                          )
+                          (cls): Sequential(
+                            (0): MLP(
+                              (net): Sequential(
+                                (0): Linear(in_features=512, out_features=3, bias=True)
+                                (1): Identity()
+                              )
+                            )
+                            (1): Softmax(dim=-1)
+                          )
+                          (criterion): NLLLoss()
+                        )
+writer                  <tensorboardX.writer.SummaryWriter object at 0x7f3929047640>
+optimizer               AdamW (
+                        Parameter Group 0
+                            amsgrad: False
+                            betas: (0.9, 0.999)
+                            eps: 1e-08
+                            initial_lr: 0.0003
+                            lr: 0.0002999814948722491
+                            weight_decay: 0.0005
+                        )
+scheduler               <torch.optim.lr_scheduler.CosineAnnealingWarmRestarts object at 0x7f392912d700>
+model_path              model/SGCClassifier512*3-Pubmed-noadv-ln0.2-fclean-241
+----------------------  ------------------------------------------------------------------------------------------------------------------------------------------------------------------------
