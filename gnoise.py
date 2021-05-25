@@ -281,11 +281,6 @@ def train(config, current_epoch: int, loader, train: bool = True):
                 # backward pass
                 loss.backward()
                 nn.utils.clip_grad_value_(config.model.parameters(), 1e2)
-                # for param in config.model.parameters():
-                #     if torch.any(torch.isnan(param.grad)):
-                #         ic(loss)
-                #         ic(param.data, param.grad, param.grad.max())
-                #         assert False, "NaN detected!"
                 config.optimizer.step()
                 config.scheduler.step()
                 current_lr = config.optimizer.param_groups[0]["lr"]

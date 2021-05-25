@@ -17,7 +17,6 @@ from torch_geometric.nn import (
     EdgeConv,
     SGConv,
 )
-import torch_geometric as tg
 from torch_geometric.datasets import ModelNet
 from torch_geometric.data import DataLoader, DataListLoader
 from torch_geometric.utils import degree, get_laplacian, remove_self_loops
@@ -108,15 +107,11 @@ class BaseClassifier(nn.Module):
         return nn.Sequential(
             MLP(i, o, batchnorm=False, activation=nn.Identity), nn.Softmax(dim=-1)
         )
-
-    # def calc_filter(x, filter, edge_index):
-    #     return filter(x, edge_index=edge_index)
     
     def embed(self, x, edge_index, est_lid: bool=False):
         # return embeddings of x
         for i, (layer, activation) in enumerate(zip(self.filters, self.activations)):
             # use static edges
-            # edge_index = knn_graph(x, k=32, batch=batch, loop=False)
             if torch.any(torch.isnan(x)):
                 ic(i, self.filters[i - 1], x.max(), x.median(), x.min())
                 ic([param.data for param in self.filters[i - 1].parameters()])
@@ -128,6 +123,8 @@ class BaseClassifier(nn.Module):
         if est_lid:
             with torch.no_grad():
                 self.lid = self.lid_calc.calcLID(x, edge_index)
+        else:
+            self.lid = torch.tensor([-1])
         return x
         
     def predict(self, x, edge_index, est_lid=False):
@@ -137,7 +134,6 @@ class BaseClassifier(nn.Module):
         return pred_probs
 
     def forward(self, data, config):
-        # print(data)
         target, edge_index, clean_target, batch, x, mask, ln_mask, train_mask = (
             data.y.long(),
             data.edge_index.long(),
@@ -151,7 +147,7 @@ class BaseClassifier(nn.Module):
         is_noisy: bool = (ln_mask.sum().item() > 0)
         n_cls = clean_target.max().long() + 1
         if not self.make_cls:
-            x = self.embed(x, edge_index, est_lid=True)
+            x = self.embed(x, edge_index, est_lid=config.est_lid)
             return x
         else:
             # predict on whole dataset
@@ -159,7 +155,7 @@ class BaseClassifier(nn.Module):
             lds = vat_loss(self, x, edge_index) # VAT loss calc.
             
             # calc labeled loss on train/test/val set
-            x = self.predict(x, edge_index, est_lid=True) # [N, C]
+            x = self.predict(x, edge_index, est_lid=config.est_lid) # [N, C]
             if config.useNCEandRCE:
                 self.criterion = NCEandRCEWithLogits(alpha=config.alpha_NCE, beta=config.beta_RCE, num_classes=n_cls)
             loss = self.criterion(x.log()[mask], target[mask])

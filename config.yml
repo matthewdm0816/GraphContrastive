@@ -4,14 +4,14 @@ debug: false
 
 # -------------------- dataset config -------------------- #
 
-dataset_type: Pubmed
+dataset_type: Cora
 dataset_path: /home/wtmo/dataset/
 
 # -------------------- training config ------------------- #
 
 optimizer_type: Adam
 gpu_id: 2
-gpu_ids: [2s]
+gpu_ids: [2]
 batch_size_single: 32
 use_sbn: true
 # model_type: GCN
@@ -31,7 +31,7 @@ total_epochs: 1000
 
 # ------------------ label noise config ------------------ #
 
-noise_rate: 0.2
+noise_rate: 0.
 gaussian_noise_rate: 0
 # gaussian_noise_rate: 0.3
 # adversarial_noise_rate: 0.03137 # 8/255
@@ -40,16 +40,20 @@ adversarial_method: FGSM
 
 # ------------------ robustness config ------------------ #
 
-lds_alpha: 1.0 # VAT
+# VAT
+lds_alpha: 0.
 vat_xi: 0.5
 vat_eps: 1.0
 vat_ip: 1
-active_loss: "" # Active Loss
-useNCEandRCE: false
+
+# Active Loss
+useNCEandRCE: true
 alpha_NCE: 1.0
 beta_RCE: 1.0
 # q: 0.7 # default 0.7
+
 # GraphLID Metrics
+est_lid: false
 knn: 10
 khop: 2
 
