@@ -141,7 +141,7 @@ class GCNIIClassifier(BaseClassifier):
     #         MLP(i, o, batchnorm=False, activation=nn.Identity), nn.Softmax(dim=-1)
     #     )
 
-    def embed(self, x, edge_index, dummy=False):
+    def embed(self, x, edge_index, est_lid=False):
         x = self.backbone(x, edge_index)
         # Calc LID
         if self.__C.GLID.ENABLE:
@@ -151,7 +151,7 @@ class GCNIIClassifier(BaseClassifier):
             self.lid = torch.tensor([-1])
         return x
     
-    def predict(self, x, edge_index, dummy=False):
+    def predict(self, x, edge_index, est_lid=False):
         # return softmaxed probs
         x_embed = self.embed(x, edge_index)
         return self.cls(x_embed) + 1e-10 # in case log0 => nan/inf
