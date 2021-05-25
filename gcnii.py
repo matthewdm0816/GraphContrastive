@@ -38,7 +38,7 @@ class GCNII(MessagePassing):
             self.activation = nn.ReLU()
         elif activation == "prelu":
             self.activation = nn.PReLU()
-        elif self.activation == "mish":
+        elif activation == "mish":
             self.activation = Mish()
 
         self.fin = fin
@@ -64,16 +64,17 @@ class GCNII(MessagePassing):
         # ((1-b)I + b W)X
         x = self.fc(x) * self.beta + (1 - self.beta) * x
 
-        return x
+        # \simga(x)
+        return self.activation(x)
 
     def message(self, x_i, x_j, norm):
         return norm.view(-1, 1) * x_j
 
 
 class GCNIIBackbone(nn.Module):
-    def __init__(self, __C):
+    def __init__(self, __C, fin):
         super().__init__()
-        self.fc = nn.Linear(__C.BACKBONE.FIN, __C.BACKBONE.HIDDEN_SIZE)
+        self.fc = nn.Linear(fin, __C.BACKBONE.HIDDEN_SIZE)
         self.layers = nn.ModuleList(
             [
                 GCNII(
@@ -85,9 +86,12 @@ class GCNIIBackbone(nn.Module):
                 for idx in range(__C.BACKBONE.LAYERS)
             ]
         )
+        ic(self.fc)
     
     def forward(self, x, edge_index):
+        ic(x.shape)
         x = self.fc(x)
+        ic(x.shape)
         for gcn in self.layers:
             x = gcn(x, edge_index=edge_index) 
         return x
@@ -99,7 +103,7 @@ class GCNIIClassifier(BaseClassifier):
         super().__init__(
             fin=fin,  
             n_cls=n_cls, 
-            hidden_layers=[],
+            hidden_layers=[1], # to make superclass happy
             dropout=__C.DROPOUT,
             criterion=nn.NLLLoss(),
             make_cls=__C.MAKE_CLS,
@@ -109,9 +113,13 @@ class GCNIIClassifier(BaseClassifier):
         # Clean unused components
         del self.filters
         del self.activations
+        del self.cls
 
+        self.fin = fin
+        self.n_cls = n_cls
         self.lid_calc = LIDCalculater(knn=__C.GLID.KNN, khop=__C.GLID.KHOP, load_dir=__C.GLID.CACHE_PATH)
         self.backbone = self.get_backbone()
+        self.cls = self.get_classifier(__C.BACKBONE.HIDDEN_SIZE, n_cls)
         
 
     # skip
@@ -126,8 +134,12 @@ class GCNIIClassifier(BaseClassifier):
         return nn.Identity()
 
     def get_backbone(self):
-        return GCNIIBackbone(self.__C)
+        return GCNIIBackbone(self.__C, self.fin)
 
+    # def get_classifier(self):
+    #     return nn.Sequential(
+    #         MLP(i, o, batchnorm=False, activation=nn.Identity), nn.Softmax(dim=-1)
+    #     )
 
     def embed(self, x, edge_index, dummy=False):
         x = self.backbone(x, edge_index)

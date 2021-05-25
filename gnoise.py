@@ -28,188 +28,173 @@ from tabulate import tabulate
 from gat_cls import *
 from utils import *
 from copy import copy
+from config import Config
+from argparse import ArgumentParser
+from gcnii import GCNIIClassifier
 
-# limit CPU usage
-torch.set_num_threads(16)
-torch.set_num_interop_threads(16)
+parser = ArgumentParser()
+parser.add_argument("--config_files", type=str, nargs='+')
+opt = parser.parse_args()
+
+# Load Config Files
+__C = Config()
+for filename in opt.config_files:
+    ic(filename)
+    __C.add_from_dict(Config.parse_from_yml(filename))
+    # ic(__C)
+# ic(__C)
+
+# Limit CPU usage
+torch.set_num_threads(__C.CPU_THREADS)
+torch.set_num_interop_threads(__C.CPU_THREADS)
 print(
     colorama.Fore.GREEN
     + "Using %d/%d cores/threads of CPU"
     % (torch.get_num_threads(), torch.get_num_interop_threads())
 )
 
-config_file = "config.yml"
-config = YAMLParser(config_file).data
+# config_file = "__C.YML"
+# config = YAMLParser(config_file).data
 
 # ------------------ configuration tests ----------------- #
 
-assert config.optimizer_type in ["Adam", "SGD"]
-assert config.dataset_type in ["Cora", "Citeseer", "Pubmed"]
-assert config.model_type in ["DGCNN", "GAT", "GCN", "SGC"]
+assert __C.OPTIMIZER_TYPE in ["Adam", "SGD", "AdamW"]
+assert __C.DATASET_TYPE in ["Cora", "Citeseer", "Pubmed"]
+assert __C.MODEL_TYPE in ["DGCNN", "GCN", "SGC", "GCNII"]
 
 # ---------------- general configurations ---------------- #
 
-config.ngpu = len(config.gpu_ids)
-config.parallel = config.ngpu > 1
-config.batch_size = config.batch_size_single * config.ngpu
-config.device = torch.device(
-    "cuda:%d" % config.gpu_id if torch.cuda.is_available() else "cpu"
+__C.NGPU = len(__C.GPU_IDS)
+__C.PARALLEL = __C.NGPU > 1
+__C.BATCH_SIZE = __C.BATCH_SIZE_SINGLE * __C.NGPU
+__C.DEVICE = torch.device(
+    "cuda:%d" % __C.GPU_ID if torch.cuda.is_available() else "cpu"
 )
 
-config.timestamp = init_train(config.parallel, config.gpu_ids)
+__C.TIMESTAMP = init_train(__C.PARALLEL, __C.GPU_IDS)
 
 # ---------------- dataset and dataloaders --------------- #
 
-if config.dataset_type in ["Cora", "Citeseer", "Pubmed"]:
-    config.dataset = Planetoid(
-        root=os.path.join(config.dataset_path, config.dataset_type),
-        name=config.dataset_type,
+if __C.DATASET_TYPE in ["Cora", "Citeseer", "Pubmed"]:
+    __C.DATASET = Planetoid(
+        root=os.path.join(__C.DATASET_PATH, __C.DATASET_TYPE), name=__C.DATASET_TYPE,
     )
-    config.fin = config.dataset.num_node_features
-    config.n_cls = config.dataset.num_classes
-    ic(config.dataset.data, config.fin, config.n_cls)
-    ic(config.dataset.data.train_mask.sum().item())
-    ic(config.dataset.data.val_mask.sum().item())
-    ic(config.dataset.data.test_mask.sum().item())
+    __C.FIN = __C.DATASET.num_node_features
+    __C.N_CLS = __C.DATASET.num_classes
+    ic(__C.DATASET.data, __C.FIN, __C.N_CLS)
+    ic(__C.DATASET.data.train_mask.sum().item())
+    ic(__C.DATASET.data.val_mask.sum().item())
+    ic(__C.DATASET.data.test_mask.sum().item())
 
     # ---------------- add label/feature noise --------------- #
-    config.ln_mask = uniform_noise(
-        config.dataset.data, config.noise_rate
-    )  # NOTE: 1 if is noisy
-    ic(config.ln_mask)
-    gaussian_feature_noise(config.dataset.data, config.gaussian_noise_rate)
+    __C.LN_MASK = uniform_noise(__C.DATASET.data, __C.NOISE_RATE)  # NOTE: 1 if is noisy
+    ic(__C.LN_MASK)
+    gaussian_feature_noise(__C.DATASET.data, __C.GAUSSIAN_NOISE_RATE)
 
-    config.train_dataset = config.dataset.data.clone()
+    __C.TRAIN_DATASET = __C.DATASET.data.clone()
     process_transductive_data(
-        config.train_dataset, config.dataset.data.train_mask, config.ln_mask
+        __C.TRAIN_DATASET, __C.DATASET.data.train_mask, __C.LN_MASK
     )
-    config.val_dataset = config.dataset.data.clone()
-    process_transductive_data(
-        config.val_dataset, config.dataset.data.val_mask, config.ln_mask
-    )
-    config.test_dataset = config.dataset.data.clone()
-    process_transductive_data(
-        config.test_dataset, config.dataset.data.test_mask, config.ln_mask
-    )
-    ic(config.train_dataset)
+    __C.VAL_DATASET = __C.DATASET.data.clone()
+    process_transductive_data(__C.VAL_DATASET, __C.DATASET.data.val_mask, __C.LN_MASK)
+    __C.TEST_DATASET = __C.DATASET.data.clone()
+    process_transductive_data(__C.TEST_DATASET, __C.DATASET.data.test_mask, __C.LN_MASK)
+    ic(__C.TRAIN_DATASET)
     # FIXME: single data dataset for now
-    if not config.parallel:
-        config.train_loader = DataLoader(
-            [config.train_dataset], batch_size=config.batch_size
-        )
-        config.val_loader = DataLoader(
-            [config.val_dataset], batch_size=config.batch_size
-        )
-        config.test_loader = DataLoader(
-            [config.test_dataset], batch_size=config.batch_size
-        )
+    if not __C.PARALLEL:
+        __C.TRAIN_LOADER = DataLoader([__C.TRAIN_DATASET], batch_size=__C.BATCH_SIZE)
+        __C.VAL_loader = DataLoader([__C.VAL_DATASET], batch_size=__C.BATCH_SIZE)
+        __C.TEST_loader = DataLoader([__C.TEST_DATASET], batch_size=__C.BATCH_SIZE)
     else:
         # todo
-        config.train_loader = DataListLoader(
-            [config.train_dataset], batch_size=config.batch_size
+        __C.TRAIN_LOADER = DataListLoader(
+            [__C.TRAIN_DATASET], batch_size=__C.BATCH_SIZE
         )
-        config.val_loader = DataListLoader(
-            [config.val_dataset], batch_size=config.batch_size
-        )
-        config.test_loader = DataListLoader(
-            [config.test_dataset], batch_size=config.batch_size
-        )
+        __C.VAL_loader = DataListLoader([__C.VAL_DATASET], batch_size=__C.BATCH_SIZE)
+        __C.TEST_loader = DataListLoader([__C.TEST_DATASET], batch_size=__C.BATCH_SIZE)
 else:
     raise NotImplementedError("Only supports Cora/Citeseer/Pubmed dataser for now")
 
-config.batch_cnt = len(config.train_loader)
+__C.BATCH_CNT = len(__C.TRAIN_LOADER)
 
 # ------------------ model configurations ---------------- #
 
 
-if config.model_type == "DGCNN":
-    config.model = DGCNNClassifier(
-        config.fin,
-        config.n_cls,
-        hidden_layers=config.hidden_layers,
-        dropout=config.dropout,
-        knn=config.knn,
-        khop=config.khop,
+if __C.MODEL_TYPE == "DGCNN":
+    __C.MODEL = DGCNNClassifier(
+        __C.FIN,
+        __C.N_CLS,
+        hidden_layers=__C.HIDDEN_LAYERS,
+        dropout=__C.DROPOUT,
+        knn=__C.KNN,
+        khop=__C.KHOP,
     )
-elif config.model_type == "GAT":
-    config.model = GATClassifier(
-        config.fin,
-        config.n_cls,
-        hidden_layers=config.hidden_layers,
-        dropout=config.dropout,
+elif __C.MODEL_TYPE == "GCN":
+    __C.MODEL = GCNClassifier(
+        __C.FIN,
+        __C.N_CLS,
+        hidden_layers=__C.HIDDEN_LAYERS,
+        dropout=__C.DROPOUT,
+        knn=__C.KNN,
+        khop=__C.KHOP,
     )
-elif config.model_type == "GCN":
-    config.model = GCNClassifier(
-        config.fin,
-        config.n_cls,
-        hidden_layers=config.hidden_layers,
-        dropout=config.dropout,
-        knn=config.knn,
-        khop=config.khop,
+elif __C.MODEL_TYPE == "SGC":
+    __C.MODEL = SGCClassifier(
+        __C.FIN,
+        __C.N_CLS,
+        hidden_layers=__C.HIDDEN_LAYERS,
+        dropout=__C.DROPOUT,
+        knn=__C.KNN,
+        khop=__C.KHOP,
     )
-elif config.model_type == "SGC":
-    config.model = SGCClassifier(
-        config.fin,
-        config.n_cls,
-        hidden_layers=config.hidden_layers,
-        dropout=config.dropout,
-        knn=config.knn,
-        khop=config.khop,
-    )
+elif __C.MODEL_TYPE == "GCNII":
+    __C.MODEL = GCNIIClassifier(__C.FIN, __C.N_CLS, __C)
 else:
     raise NotImplementedError
 
 
-if config.parallel and config.use_sbn:
-    config.model = parallelize_model(
-        config.model, config.device, config.gpu_ids, config.gpu_id
-    )
+if __C.PARALLEL and __C.USE_SBN:
+    __C.MODEL = parallelize_model(__C.MODEL, __C.DEVICE, __C.GPU_IDS, __C.GPU_ID)
 else:
-    config.model = config.model.to(config.device)
+    __C.MODEL = __C.MODEL.to(__C.DEVICE)
 
-config.model_name = "%s-%s-%s-%s-%s-%s" % (
-    config.model_name,
-    config.dataset_type,
-    (config.adversarial_method + "%.3f" % config.adversarial_noise_rate)
-    if config.adversarial_noise_rate > 1e-5
+__C.MODEL_NAME = "%s-%s-%s-%s-%s-%s" % (
+    __C.MODEL_NAME,
+    __C.DATASET_TYPE,
+    (__C.ADVERSARIAL_METHOD + "%.3f" % __C.ADVERSARIAL_NOISE_RATE)
+    if __C.ADVERSARIAL_NOISE_RATE > 1e-5
     else "noadv",
-    "lnclean" if config.noise_rate < 1e-6 else "ln%.1f" % config.noise_rate,
-    "fclean"
-    if config.gaussian_noise_rate < 1e-6
-    else "fn%.1e" % config.gaussian_noise_rate,
-    str(config.timestamp),
+    "lnclean" if __C.NOISE_RATE < 1e-6 else "ln%.1f" % __C.NOISE_RATE,
+    "fclean" if __C.GAUSSIAN_NOISE_RATE < 1e-6 else "fn%.1e" % __C.GAUSSIAN_NOISE_RATE,
+    str(__C.TIMESTAMP),
 )
 
-config.writer = SummaryWriter(comment=config.model_name)
+__C.WRITER = SummaryWriter(comment=__C.MODEL_NAME)
 
 # --------------- optimizer configurations --------------- #
 
-config.optimizer, config.scheduler = get_optimizer(
-    config.model,
-    config.optimizer_type,
-    config.lr,
-    config.beg_epochs,
-    config.T_0,
-    config.T_mult,
+__C.OPTIMIZER, __C.SCHEDULER = get_optimizer(
+    __C.MODEL, __C.OPTIMIZER_TYPE, __C.LR, __C.BEG_EPOCHS, __C.T_0, __C.T_MULT,
 )
 
 # ---------------- milestone optional load --------------- #
 
-config.model_path = os.path.join("model", config.model_name)
-check_dir(config.model_path)
+__C.MODEL_PATH = os.path.join("model", __C.MODEL_NAME)
+check_dir(__C.MODEL_PATH)
 
-if config.milestone_path is not None:
-    load_model(config.model, config.optimizer, config.milestone_path, config.beg_epochs)
+if __C.MILESTONE_PATH is not None:
+    load_model(__C.MODEL, __C.OPTIMIZER, __C.MILESTONE_PATH, __C.BEG_EPOCHS)
 else:
-    init_weights(config.model)
+    init_weights(__C.MODEL)
 
 # --------------------- print configs -------------------- #
 
-config_str = tabulate(config.items())
-print(config_str)
-with open(config.tabulate_path, "w") as f:
-    f.write(config_str)
-if config.debug:
+ic(__C)
+# config_str = tabulate(__C.items())
+# print(config_str)
+# with open(__C.TABULATE_PATH, "w") as f:
+#     f.write(config_str)
+if __C.DEBUG:
     exit(0)
 
 # ----------------- train/eval functions ----------------- #
@@ -220,11 +205,11 @@ def train(config, current_epoch: int, loader, train: bool = True):
     Train 1 epoch
     """
     if train:
-        config.model.train()
+        __C.MODEL.train()
     else:
-        config.model.eval()
+        __C.MODEL.eval()
 
-    config.optimizer.zero_grad()
+    __C.OPTIMIZER.zero_grad()
 
     # forward pass metrics
     (
@@ -235,7 +220,7 @@ def train(config, current_epoch: int, loader, train: bool = True):
         total_noise_confidence,
         total_real_entropy,
         total_noise_entropy,
-        total_lid
+        total_lid,
     ) = [Counter() for _ in range(8)]
     # adversarial pass metrics
     (
@@ -251,13 +236,11 @@ def train(config, current_epoch: int, loader, train: bool = True):
         # for i, batch in tqdm(enumerate(loader), total=len(loader)):
         for i, batch in enumerate(loader):
             # torch.cuda.empty_cache()
-            batch = process_batch(
-                batch, config.device, config.parallel, config.dataset_type
-            )
-            config.optimizer.zero_grad()
+            batch = process_batch(batch, __C.DEVICE, __C.PARALLEL, __C.DATASET_TYPE)
+            __C.OPTIMIZER.zero_grad()
             data_size = batch.x[batch.mask].shape[0]
             # forward pass
-            # with torch.autograd.set_detect_anomaly(True):pip 
+            # with torch.autograd.set_detect_anomaly(True):pip
             (
                 loss,
                 x,
@@ -268,8 +251,8 @@ def train(config, current_epoch: int, loader, train: bool = True):
                 real_ent,
                 noise_ent,
                 # lid
-            ) = config.model(batch, config)
-            lid = config.model.lid
+            ) = __C.MODEL(batch, config)
+            lid = __C.MODEL.lid
             loss = loss.mean()
             real_conf = real_conf.mean()
             noise_conf = noise_conf.mean()
@@ -280,12 +263,12 @@ def train(config, current_epoch: int, loader, train: bool = True):
             if train:
                 # backward pass
                 loss.backward()
-                nn.utils.clip_grad_value_(config.model.parameters(), 1e2)
-                config.optimizer.step()
-                config.scheduler.step()
-                current_lr = config.optimizer.param_groups[0]["lr"]
-                config.optimizer.zero_grad()
-            if current_epoch % config.report_iterations == 0:
+                nn.utils.clip_grad_value_(__C.MODEL.parameters(), 1e2)
+                __C.OPTIMIZER.step()
+                __C.SCHEDULER.step()
+                current_lr = __C.OPTIMIZER.param_groups[0]["lr"]
+                __C.OPTIMIZER.zero_grad()
+            if current_epoch % __C.REPORT_ITERATIONS == 0:
                 if train:
                     ic(current_lr)
                 print(
@@ -296,8 +279,8 @@ def train(config, current_epoch: int, loader, train: bool = True):
                         "t" if train else "e",
                         i,
                         loss.detach().item(),
-                        100.0 * acc.detach().item(), # comparint to noisy labels
-                        100.0 * oacc.detach().item(), # comparing to real labels
+                        100.0 * acc.detach().item(),  # comparint to noisy labels
+                        100.0 * oacc.detach().item(),  # comparing to real labels
                         lid.detach().item(),
                         noise_conf.detach().item(),
                         real_conf.detach().item(),
@@ -308,18 +291,18 @@ def train(config, current_epoch: int, loader, train: bool = True):
 
             # adversarial pass, grad required
             with torch.set_grad_enabled(True):
-                if config.adversarial_noise_rate > 1e-5:
-                    if config.adversarial_method == "FGSM":
+                if __C.ADVERSARIAL_NOISE_RATE > 1e-5:
+                    if __C.ADVERSARIAL_METHOD == "FGSM":
                         adv_batch = copy_batch(batch)
                         adv_batch.x.requires_grad = True
-                        loss, *_ = config.model(adv_batch, config)
+                        loss, *_ = __C.MODEL(adv_batch, config)
                         loss = loss.mean()
                         loss.backward()
                         adv = adv_batch.x
                         norm = adv.abs().max(dim=-1)[0].mean()  # mean max
                         # ic(norm, adv.abs().max())
                         vadv = (
-                            torch.sgn(adv.grad) * norm * config.adversarial_noise_rate
+                            torch.sgn(adv.grad) * norm * __C.ADVERSARIAL_NOISE_RATE
                         )  # adv batch
                         adv = vadv + adv
                         # ic(adv_batch.y, adv_batch.y.shape)
@@ -334,7 +317,7 @@ def train(config, current_epoch: int, loader, train: bool = True):
                                 adv_original_correct,
                                 adv_real_ent,
                                 adv_noise_ent,
-                            ) = config.model(adv_batch, config)
+                            ) = __C.MODEL(adv_batch, config)
                         adv_loss = adv_loss.mean()
                         adv_real_conf = adv_real_conf.mean()
                         adv_noise_conf = adv_noise_conf.mean()
@@ -344,8 +327,8 @@ def train(config, current_epoch: int, loader, train: bool = True):
                         adv_oacc = adv_original_correct.sum() / data_size
                     else:
                         raise NotImplementedError
-                    config.optimizer.zero_grad()  # clean grads after adversarial pass
-                    if current_epoch % config.report_iterations == 0:
+                    __C.OPTIMIZER.zero_grad()  # clean grads after adversarial pass
+                    if current_epoch % __C.REPORT_ITERATIONS == 0:
                         print(
                             colorama.Fore.MAGENTA
                             + "[%d%s/%d]LOSS: %.2e, NoisyACC: %.2f%%, CleanACC: %.2f%%, NoisyCONF: %.2f, CleanCONF: %.2f, NoisyENT: %.2f, CleanENT:%.2f"
@@ -416,7 +399,7 @@ def train(config, current_epoch: int, loader, train: bool = True):
 # ------------------------- main ------------------------- #
 
 if __name__ == "__main__":
-    for epoch in range(config.beg_epochs, config.total_epochs + 1):
+    for epoch in range(__C.BEG_EPOCHS, __C.TOTAL_EPOCHS + 1):
         (
             train_loss,
             train_acc,
@@ -434,7 +417,7 @@ if __name__ == "__main__":
             adv_train_real_entropy,
             adv_train_noise_entropy,
             current_lr,
-        ) = train(config, epoch, loader=config.train_loader, train=True)
+        ) = train(__C, epoch, loader=__C.TRAIN_LOADER, train=True)
         (
             test_acc,
             test_loss,
@@ -452,28 +435,28 @@ if __name__ == "__main__":
             adv_test_real_entropy,
             adv_test_noise_entropy,
             _,
-        ) = train(config, epoch, loader=config.test_loader, train=False)
+        ) = train(__C, epoch, loader=__C.TEST_loader, train=False)
         # ---------------------- save model ---------------------- #
-        if epoch % config.milestone_save_epochs == 0 and epoch != 0:
-            if config.parallel:
-                model_to_save = config.model.module
+        if epoch % __C.MILESTONE_SAVE_EPOCHS == 0 and epoch != 0:
+            if __C.PARALLEL:
+                model_to_save = __C.MODEL.module
             else:
-                model_to_save = config.model
+                model_to_save = __C.MODEL
             torch.save(
                 model_to_save.state_dict(),
-                os.path.join(config.model_path, "model-%d.save" % (epoch)),
+                os.path.join(__C.MODEL_PATH, "model-%d.save" % (epoch)),
             )
             torch.save(
-                config.optimizer.state_dict(),
-                os.path.join(config.model_path, "opt-%d.save" % (epoch)),
+                __C.OPTIMIZER.state_dict(),
+                os.path.join(__C.MODEL_PATH, "opt-%d.save" % (epoch)),
             )
             torch.save(
                 model_to_save.state_dict(),
-                os.path.join(config.model_path, "model-latest.save"),
+                os.path.join(__C.MODEL_PATH, "model-latest.save"),
             )
             torch.save(
-                config.optimizer.state_dict(),
-                os.path.join(config.model_path, "opt-latest.save"),
+                __C.OPTIMIZER.state_dict(),
+                os.path.join(__C.MODEL_PATH, "opt-latest.save"),
             )
 
         # ------------------ log to tensorboard ------------------ #
@@ -513,7 +496,7 @@ if __name__ == "__main__":
 
         for key in record_dict:
             if not isinstance(record_dict[key], dict):
-                config.writer.add_scalar(key, record_dict[key], epoch)
+                __C.WRITER.add_scalar(key, record_dict[key], epoch)
             else:
-                config.writer.add_scalars(key, record_dict[key], epoch)
+                __C.WRITER.add_scalars(key, record_dict[key], epoch)
                 # add multiple records

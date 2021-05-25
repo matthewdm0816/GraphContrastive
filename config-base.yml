@@ -1,0 +1,68 @@
+# --------------------- DEBUG CONFIG --------------------- #
+
+DEBUG: false
+
+# -------------------- DATASET CONFIG -------------------- #
+
+DATASET_TYPE: Cora
+DATASET_PATH: /home/wtmo/dataset/
+
+# -------------------- TRAINING CONFIG ------------------- #
+
+OPTIMIZER_TYPE: Adam
+GPU_ID: 2
+GPU_IDS: [2]
+BATCH_SIZE_SINGLE: 32
+USE_SBN: true
+# MODEL_TYPE: GCN
+# HIDDEN_LAYERS: [512, 1024, 512]
+# MODEL_NAME: GCNCLASSIFIER512-1024-512
+MODEL_TYPE: SGC
+HIDDEN_LAYERS: [512] # single layer, k=3 by default
+MODEL_NAME: SGCClassifier512*3
+LR: 0.005
+T_0: 200
+WEIGHT_DECAY: 0.0005
+DROPOUT: 0.5
+T_MULT: 1
+BEG_EPOCHS: 0
+TOTAL_EPOCHS: 1000
+
+# ------------------ LABEL NOISE CONFIG ------------------ #
+
+NOISE_RATE: 0.
+GAUSSIAN_NOISE_RATE: 0
+# GAUSSIAN_NOISE_RATE: 0.3
+# ADVERSARIAL_NOISE_RATE: 0.03137 # 8/255
+ADVERSARIAL_NOISE_RATE: 0
+ADVERSARIAL_METHOD: FGSM
+
+# ------------------ ROBUSTNESS CONFIG ------------------ #
+
+# VAT
+LDS_ALPHA: 0.
+VAT_XI: 0.5
+VAT_EPS: 1.0
+VAT_IP: 1
+
+# ACTIVE LOSS
+USENCEandRCE: true
+ALPHA_NCE: 1.0
+BETA_RCE: 1.0
+# Q: 0.7 # DEFAULT 0.7
+
+# GRAPHLID METRICS
+EST_LID: false
+KNN: 10
+KHOP: 2
+
+# ------------------- MILESTONE CONFIG ------------------- #
+
+MILESTONE_PATH: null
+MILESTONE_SAVE_EPOCHS: 10
+
+# ---------------------- MISC CONFIG --------------------- #
+
+REPORT_ITERATIONS: 10
+TABULATE_PATH: last_run.log
+CPU_THREADS: 16

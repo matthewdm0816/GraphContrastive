@@ -1,33 +1,39 @@
-from typing import MethodType, List, Optional
+from typing import List, Optional
+from icecream import ic
 
-class Config:
-    def __init__(self):
-        pass
-    
-    @staticmethod
-    def parse_to_dict(self, args):
-        args_dict = {}
-        for arg in dir(args):
-            if not arg.startswith('_') and not isinstance(getattr(args, arg), MethodType):
-                if getattr(args, arg) is not None:
-                    args_dict[arg] = getattr(args, arg)
+class ObjectDict(dict):
+    def __init__(self, d: Optional[dict] = None):
+        super().__init__()
+        if d is not None:
+            self.add_from_dict(d)
 
-        return args_dict
-    
-    def add_args(self, args_dict):
-        for arg in args_dict:
-            setattr(self, arg, args_dict[arg])
+    def __getattr__(self, key):
+        return self[key]
 
-    def __str__(self):
-        res = []
-        for attr in dir(self):
-            if not attr.startswith('__') and not isinstance(getattr(self, attr), MethodType):
-                res.append(('{ %-17s }->' % attr) + getattr(self, attr))
+    def __setattr__(self, key, value):
+        self[key] = value
 
-        return '\n'.join(res)
-    
-    def parse_from_yml(self, filename):
+    @classmethod
+    def parse_from_yml(cls, filename: str):
         import yaml
-        with open(filename, 'r') as f:
+
+        with open(filename, "r") as f:
             args = yaml.safe_load(f)
-        self.add_args(args)
+        return cls(args)
+
+    def add_from_dict(self, d: dict):
+        r"""
+        Merge from other dict-like object
+        """
+        for key, value in d.items():
+            # ic(key, value)
+            if isinstance(value, dict):
+                value = ObjectDict(value)
+            self[key] = value
+
+
+# Alias for ObjectDict
+# class Config(dict):
+#     def __init__(self):
+#         super().__init__()
+Config = ObjectDict

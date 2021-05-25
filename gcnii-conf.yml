@@ -1,4 +1,5 @@
 ---
+# ------------------ MODEL CONFIG ------------------ #
 BACKBONE:
   ACTIVATION: mish
   ALPHA: 0.1
@@ -6,15 +7,68 @@ BACKBONE:
   HIDDEN_SIZE: 2048
   LAMBDA: 0.7
   LAYERS: 16
-DATASET: Cora
-DROPOUT: 0
+DROPOUT: 0.5
+# ------------------ ROBUSTNESS CONFIG ------------------ #
+
+
+NOISE_RATE: 0.
+GAUSSIAN_NOISE_RATE: 0
+ADVERSARIAL_NOISE_RATE: 0
+ADVERSARIAL_METHOD: FGSM
+
 GLID:
   CACHE_PATH: subgraphs.npy
   ENABLE: false
   KHOP: 3
   KNN: 10
-# LR: 0.01
+  
+VAT:
+  ALPHA: 1.0 
+  XI: 0.5
+  EPS: 1.0
+  IP: 1
+ACTIVE_LOSS: 
+  ENABLE: True
+  ALPHA: 1.0 
+  BETA: 1.0
+  Q: 0.7
+
+
+
+# --------------------- DEBUG CONFIG --------------------- #
+
+DEBUG: false
+
+# -------------------- DATASET CONFIG -------------------- #
+
+DATASET_TYPE: Cora
+DATASET_PATH: /home/wtmo/dataset/
+
+# -------------------- TRAINING CONFIG ------------------- #
+
+OPTIMIZER_TYPE: Adam
+GPU_ID: 2
+GPU_IDS: [2]
+BATCH_SIZE_SINGLE: 32
+USE_SBN: true
+MODEL_TYPE: GCNII
+MODEL_NAME: GCNII2048*16
+LR: 0.01
+T_0: 200
+WEIGHT_DECAY: 0.0005
+T_MULT: 1
+BEG_EPOCHS: 0
+TOTAL_EPOCHS: 1000
+
+
+# ------------------- MILESTONE CONFIG ------------------- #
+
+MILESTONE_PATH: null
+MILESTONE_SAVE_EPOCHS: 10
+
+# ---------------------- MISC CONFIG --------------------- #
+
+REPORT_ITERATIONS: 10
+TABULATE_PATH: last_run.log
+CPU_THREADS: 16
 MAKE_CLS: true
-# N_CLS: 3
-# OPTIMIZER: AdamW
-# WEIGHT_DECAY: 0.0005

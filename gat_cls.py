@@ -88,7 +88,9 @@ class BaseClassifier(nn.Module):
         self.lid = None
         self.knn = knn
         self.khop = khop
-        self.lid_calc = LIDCalculater(knn=self.knn, khop=self.khop, load_dir='subgraphs.npy')
+        self.lid_calc = LIDCalculater(
+            knn=self.knn, khop=self.khop, load_dir="subgraphs.npy"
+        )
 
     def get_layer(self, i, o):
         raise NotImplementedError
@@ -107,8 +109,8 @@ class BaseClassifier(nn.Module):
         return nn.Sequential(
             MLP(i, o, batchnorm=False, activation=nn.Identity), nn.Softmax(dim=-1)
         )
-    
-    def embed(self, x, edge_index, est_lid: bool=False):
+
+    def embed(self, x, edge_index, est_lid: bool = False):
         # return embeddings of x
         for i, (layer, activation) in enumerate(zip(self.filters, self.activations)):
             # use static edges
@@ -118,7 +120,7 @@ class BaseClassifier(nn.Module):
                 assert False, "NaN detected!"
             x = layer(x, edge_index=edge_index)
             x = activation(x)
-            
+
         # Calc LID
         if est_lid:
             with torch.no_grad():
@@ -126,14 +128,14 @@ class BaseClassifier(nn.Module):
         else:
             self.lid = torch.tensor([-1])
         return x
-        
+
     def predict(self, x, edge_index, est_lid=False):
         # return softmaxed probs
         x_embed = self.embed(x, edge_index, est_lid=est_lid)
-        pred_probs = self.cls(x_embed) + 1e-10 # in case log0 => nan/inf
+        pred_probs = self.cls(x_embed) + 1e-10  # in case log0 => nan/inf
         return pred_probs
 
-    def forward(self, data, config):
+    def forward(self, data, __C):
         target, edge_index, clean_target, batch, x, mask, ln_mask, train_mask = (
             data.y.long(),
             data.edge_index.long(),
@@ -141,26 +143,30 @@ class BaseClassifier(nn.Module):
             data.batch,
             data.x,
             data.mask.bool(),
-            data.ln_mask.bool(), # label noise mask
+            data.ln_mask.bool(),  # label noise mask
             data.train_mask.bool(),
         )
         is_noisy: bool = (ln_mask.sum().item() > 0)
         n_cls = clean_target.max().long() + 1
         if not self.make_cls:
-            x = self.embed(x, edge_index, est_lid=config.est_lid)
+            x = self.embed(x, edge_index, est_lid=__C.GLID.ENABLE)
             return x
         else:
             # predict on whole dataset
-            vat_loss = VATGraphLoss(xi=config.vat_xi, eps=config.vat_eps, ip=config.vat_ip)
-            lds = vat_loss(self, x, edge_index) # VAT loss calc.
-            
+            vat_loss = VATGraphLoss(xi=__C.VAT.XI, eps=__C.VAT.EPS, ip=__C.VAT.IP)
+            lds = vat_loss(self, x, edge_index)  # VAT loss calc.
+
             # calc labeled loss on train/test/val set
-            x = self.predict(x, edge_index, est_lid=config.est_lid) # [N, C]
-            if config.useNCEandRCE:
-                self.criterion = NCEandRCEWithLogits(alpha=config.alpha_NCE, beta=config.beta_RCE, num_classes=n_cls)
+            x = self.predict(x, edge_index, est_lid=__C.GLID.ENABLE)  # [N, C]
+            if __C.ACTIVE_LOSS.ENABLE:
+                self.criterion = NCEandRCEWithLogits(
+                    alpha=__C.ACTIVE_LOSS.ALPHA,
+                    beta=__C.ACTIVE_LOSS.BETA,
+                    num_classes=n_cls,
+                )
             loss = self.criterion(x.log()[mask], target[mask])
-            loss += config.lds_alpha * lds
-            
+            loss += __C.VAT.ALPHA * lds
+
             confidence, sel = x.max(dim=-1)  # [N, ]
             # record correct cls
             correct = sel[mask].eq(target[mask]).float().sum()  # [1, ]
