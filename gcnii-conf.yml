@@ -1,0 +1,20 @@
+---
+BACKBONE:
+  ACTIVATION: mish
+  ALPHA: 0.1
+  # FIN: 12123
+  HIDDEN_SIZE: 2048
+  LAMBDA: 0.7
+  LAYERS: 16
+DATASET: Cora
+DROPOUT: 0
+GLID:
+  CACHE_PATH: subgraphs.npy
+  ENABLE: false
+  KHOP: 3
+  KNN: 10
+# LR: 0.01
+MAKE_CLS: true
+# N_CLS: 3
+# OPTIMIZER: AdamW
+# WEIGHT_DECAY: 0.0005
